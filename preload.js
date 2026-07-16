@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   fetchModels: (params) => ipcRenderer.invoke('models:fetch', params),
   analyze: (params) => ipcRenderer.invoke('analyze:run', params),
   generateResume: (params) => ipcRenderer.invoke('resume:generate', params),
+  checkResumeAts: (params) => ipcRenderer.invoke('resume:checkAts', params),
   generateCoverLetter: (params) => ipcRenderer.invoke('cover:generate', params),
   saveCoverLetter: (params) => ipcRenderer.invoke('cover:save', params),
   answerQuestions: (params) => ipcRenderer.invoke('qa:answer', params),

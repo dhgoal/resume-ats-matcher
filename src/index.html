@@ -144,6 +144,17 @@
         <div id="tailorEmpty" class="panel empty-hint">Run an analysis on the <strong>Analyze</strong> tab first — then pick a base resume here to tailor.</div>
         <div id="tailorBody" class="hidden">
           <div class="panel">
+            <div class="row folder-row">
+              <label class="field grow">
+                <span>Output folder (where generated files are saved)</span>
+                <input id="outputDir" type="text" placeholder="Defaults to your resumes folder" readonly />
+              </label>
+              <button id="browseOutput" class="btn">📁 Change…</button>
+              <button id="resetOutput" class="btn" title="Use the resumes folder">↺ Default</button>
+            </div>
+          </div>
+
+          <div class="panel">
             <div class="tool-head">
               <h3>✨ Generate a tailored resume</h3>
               <button id="genResume" class="btn primary">Generate .docx + .pdf</button>

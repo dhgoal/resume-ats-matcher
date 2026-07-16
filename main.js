@@ -59,6 +59,7 @@ function normalizeSettings(saved) {
     provider,
     providers,
     directory: typeof saved.directory === 'string' ? saved.directory : '',
+    outputDirectory: typeof saved.outputDirectory === 'string' ? saved.outputDirectory : '',
     concurrency: Math.max(1, Math.min(8, Number(saved.concurrency) || 3)),
   };
 }
@@ -559,9 +560,35 @@ Return ONLY the JSON object.`;
 const DEFAULT_STYLE = {
   fontFamily: 'Calibri',
   fontSizePt: 11,
-  headingColor: '1A3B6B',
+  headingColor: null,
+  // heading defaults to a plain bold heading (matches most resumes better than a
+  // "designed" uppercase/coloured/underlined heading with a rule under it)
+  heading: { bold: true, caps: false, underline: false, color: null, sizePt: null, border: false },
   margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 }, // twips (1 inch)
 };
+
+// Pull the source's heading formatting from its Heading2/Heading1 style definition.
+function extractHeadingStyle(styles) {
+  for (const id of ['Heading2', 'Heading1']) {
+    const m = styles.match(new RegExp(`<w:style[^>]*w:styleId="${id}"[\\s\\S]*?</w:style>`));
+    if (!m) continue;
+    const block = m[0];
+    const rpr = (block.match(/<w:rPr>([\s\S]*?)<\/w:rPr>/) || [])[1] || '';
+    const boldTag = rpr.match(/<w:b\b[^>]*\/?>/);
+    return {
+      bold: boldTag ? !/w:val="(0|false)"/.test(boldTag[0]) : true,
+      caps: /<w:caps\b(?![^>]*w:val="(0|false)")/.test(rpr),
+      underline: /<w:u\b[^>]*w:val="(?!none)[a-z]/i.test(rpr),
+      color: (rpr.match(/<w:color\s+w:val="([0-9A-Fa-f]{6})"/) || [])[1] || null,
+      sizePt: (() => {
+        const s = Number((rpr.match(/<w:sz\s+w:val="(\d+)"/) || [])[1]);
+        return s ? s / 2 : null;
+      })(),
+      border: false,
+    };
+  }
+  return null;
+}
 
 async function extractDocxStyle(filePath) {
   try {
@@ -588,9 +615,7 @@ async function extractDocxStyle(filePath) {
     const szHalf = Number((dd.match(/<w:sz\s+w:val="(\d+)"/) || [])[1]);
     const fontSizePt = szHalf ? szHalf / 2 : DEFAULT_STYLE.fontSizePt;
 
-    const headingColor =
-      (styles.match(/w:styleId="Heading[1-3]"[\s\S]*?<w:color\s+w:val="([0-9A-Fa-f]{6})"/) || [])[1] ||
-      DEFAULT_STYLE.headingColor;
+    const heading = extractHeadingStyle(styles) || { ...DEFAULT_STYLE.heading };
 
     const pg = (docXml.match(/<w:pgMar\b[^>]*>/) || [])[0] || '';
     const m = (k) => Number((pg.match(new RegExp('w:' + k + '="(\\d+)"')) || [])[1]);
@@ -601,7 +626,7 @@ async function extractDocxStyle(filePath) {
       left: m('left') || DEFAULT_STYLE.margins.left,
     };
 
-    return { fontFamily: font, fontSizePt, headingColor, margins };
+    return { fontFamily: font, fontSizePt, heading, headingColor: heading.color, margins };
   } catch {
     return { ...DEFAULT_STYLE };
   }
@@ -624,7 +649,7 @@ function sizeSet(style) {
 function buildResumeDocx(r, style) {
   const s = sizeSet(style);
   const font = style.fontFamily;
-  const headColor = style.headingColor || DEFAULT_STYLE.headingColor;
+  const hStyle = style.heading || DEFAULT_STYLE.heading;
   const children = [];
 
   children.push(
@@ -644,7 +669,7 @@ function buildResumeDocx(r, style) {
     );
   }
   if (str(r.summary)) {
-    children.push(sectionHeading('Summary', s, headColor, font));
+    children.push(sectionHeading('Summary', s, hStyle, font));
     children.push(
       new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text: str(r.summary), size: s.body, font })] })
     );
@@ -653,7 +678,7 @@ function buildResumeDocx(r, style) {
   for (const section of Array.isArray(r.sections) ? r.sections : []) {
     const heading = str(section.heading);
     if (!heading) continue;
-    children.push(sectionHeading(heading, s, headColor, font));
+    children.push(sectionHeading(heading, s, hStyle, font));
 
     if (section.type === 'entries' && Array.isArray(section.entries)) {
       for (const e of section.entries) {
@@ -687,13 +712,23 @@ function buildResumeDocx(r, style) {
   });
 }
 
-function sectionHeading(text, s, color, font) {
-  return new Paragraph({
+function sectionHeading(text, s, h, font) {
+  const para = {
     heading: HeadingLevel.HEADING_2,
     spacing: { before: 160, after: 40 },
-    border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'aaaaaa' } },
-    children: [new TextRun({ text: text.toUpperCase(), bold: true, size: s.heading, color, font })],
-  });
+    children: [
+      new TextRun({
+        text: h.caps ? text.toUpperCase() : text,
+        bold: h.bold !== false,
+        underline: h.underline ? {} : undefined,
+        size: h.sizePt ? Math.round(h.sizePt * 2) : s.heading,
+        color: h.color || undefined,
+        font,
+      }),
+    ],
+  };
+  if (h.border) para.border = { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'aaaaaa' } };
+  return new Paragraph(para);
 }
 
 // --- HTML + PDF (rendered with real Windows fonts via Electron printToPDF) ---
@@ -707,7 +742,17 @@ function esc(s) {
 function buildResumeHtml(r, style) {
   const base = style.fontSizePt || 11;
   const font = style.fontFamily;
-  const head = '#' + (style.headingColor || DEFAULT_STYLE.headingColor);
+  const h = style.heading || DEFAULT_STYLE.heading;
+  const headCss = [
+    `font-size:${(h.sizePt || base + 1)}pt`,
+    `font-weight:${h.bold !== false ? 'bold' : 'normal'}`,
+    `color:${h.color ? '#' + h.color : '#111'}`,
+    `text-transform:${h.caps ? 'uppercase' : 'none'}`,
+    `text-decoration:${h.underline ? 'underline' : 'none'}`,
+    h.border ? 'border-bottom:1px solid #aaa;padding-bottom:2pt' : '',
+  ]
+    .filter(Boolean)
+    .join(';');
   const sectionsHtml = (Array.isArray(r.sections) ? r.sections : [])
     .filter((sec) => str(sec.heading))
     .map((sec) => {
@@ -733,7 +778,7 @@ function buildResumeHtml(r, style) {
     body { font-family: '${esc(font)}', Calibri, Arial, sans-serif; font-size: ${base}pt; color: #111; margin: 0; line-height: 1.4; }
     .name { text-align: center; font-size: ${base + 7}pt; font-weight: bold; margin: 0 0 2pt; }
     .contact { text-align: center; font-size: ${base - 1}pt; color: #444; margin: 0 0 10pt; }
-    h2 { font-size: ${base + 1}pt; text-transform: uppercase; color: ${head}; border-bottom: 1px solid #aaa; padding-bottom: 2pt; margin: 12pt 0 4pt; }
+    h2 { ${headCss}; margin: 12pt 0 4pt; }
     p.summary { margin: 0 0 8pt; }
     .entry { margin: 0 0 6pt; }
     .etitle { font-weight: bold; }
@@ -820,6 +865,31 @@ async function generateResume(params) {
     outPrice: params.outPrice,
   });
   return { docxPath, pdfPath, name: str(parsed.name) || 'Candidate', usage: usageRec };
+}
+
+// Score an already-generated resume file against the job description (verifies tailoring).
+async function checkResumeAts(params) {
+  const { provider, apiKey, baseUrl, model, jobDescription, filePath } = params;
+  if (!apiKey || !model) throw new Error('Set your provider API key and model in Settings first.');
+  if (!jobDescription || !jobDescription.trim()) throw new Error('Paste a job description first.');
+  if (!filePath) throw new Error('No generated resume to check.');
+
+  const resumeText = await extractDocxText(filePath);
+  if (!resumeText || resumeText.length < 20) throw new Error('Generated resume text was empty or unreadable.');
+
+  const scored = await scoreResume({ provider, apiKey, baseUrl, model, jobDescription, resumeText });
+  const usage = scored._usage;
+  delete scored._usage;
+  const usageRec = await recordUsage({
+    op: 'Check ATS (tailored)',
+    provider,
+    model,
+    inTokens: usage.inTokens,
+    outTokens: usage.outTokens,
+    inPrice: params.inPrice,
+    outPrice: params.outPrice,
+  });
+  return { ...scored, usage: usageRec };
 }
 
 // ---------------------------------------------------------------------------
@@ -1191,6 +1261,15 @@ ipcMain.handle('resume:generate', async (_e, params) => {
     return { ok: true, ...(await generateResume(params)) };
   } catch (err) {
     await logLine('ERROR', 'resume:generate failed', err.message || String(err));
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('resume:checkAts', async (_e, params) => {
+  try {
+    return { ok: true, ...(await checkResumeAts(params)) };
+  } catch (err) {
+    await logLine('ERROR', 'resume:checkAts failed', err.message || String(err));
     return { ok: false, error: err.message };
   }
 });

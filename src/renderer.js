@@ -55,6 +55,9 @@ const els = {
   savedQuestions: $('savedQuestions'),
   savedCount: $('savedCount'),
   contextBar: $('contextBar'),
+  outputDir: $('outputDir'),
+  browseOutput: $('browseOutput'),
+  resetOutput: $('resetOutput'),
   tailorEmpty: $('tailorEmpty'),
   tailorBody: $('tailorBody'),
   questionsEmpty: $('questionsEmpty'),
@@ -329,6 +332,29 @@ async function refreshCount(dir) {
   }
 }
 
+// Where generated files go: an explicit output folder, or the resumes folder by default.
+function effectiveOutputDir() {
+  return state.outputDirectory || state.directory || '';
+}
+function updateOutputDirField() {
+  const custom = !!state.outputDirectory;
+  els.outputDir.value = effectiveOutputDir();
+  els.outputDir.placeholder = 'Defaults to your resumes folder';
+  els.resetOutput.style.display = custom ? '' : 'none';
+}
+els.browseOutput.addEventListener('click', async () => {
+  const dir = await window.api.selectDirectory();
+  if (!dir) return;
+  state.outputDirectory = dir;
+  await window.api.saveSettings(state);
+  updateOutputDirField();
+});
+els.resetOutput.addEventListener('click', async () => {
+  state.outputDirectory = '';
+  await window.api.saveSettings(state);
+  updateOutputDirField();
+});
+
 // --------------------------------------------------------------------------
 // Analyze
 // --------------------------------------------------------------------------
@@ -479,6 +505,7 @@ function populateTools(ok) {
   els.questionsEmpty.classList.add('hidden');
   els.tailorBody.classList.remove('hidden');
   els.questionsBody.classList.remove('hidden');
+  updateOutputDirField();
   const activeTab = document.querySelector('.tab.active')?.dataset.tab;
   els.contextBar.classList.toggle('hidden', activeTab === 'analyze');
   refreshSavedQuestions();
@@ -541,7 +568,7 @@ els.genResume.addEventListener('click', async () => {
     model: ctx.a.model,
     jobDescription: ctx.jobDescription,
     baseFilePath: ctx.baseFilePath,
-    outDir: state.directory,
+    outDir: effectiveOutputDir(),
     ...activePrice(),
   });
   els.genResume.disabled = false;
@@ -549,14 +576,66 @@ els.genResume.addEventListener('click', async () => {
     els.genStatus.textContent = '⚠ ' + res.error;
     return;
   }
-  els.genStatus.textContent = `✓ Saved in your resumes folder${res.usage ? ' · used ' + fmtUsage(res.usage) : ''}:`;
+  els.genStatus.textContent = `✓ Saved${res.usage ? ' · used ' + fmtUsage(res.usage) : ''}:`;
   setStatus(`Tailored resume saved${res.usage ? ' · used ' + fmtUsage(res.usage) : ''}`);
   renderFileLinks(els.genResult, [
     { label: 'DOCX', path: res.docxPath },
     { label: 'PDF', path: res.pdfPath },
   ]);
+  renderCheckAts(els.genResult, res.docxPath, ctx.jobDescription);
   refreshUsage();
 });
+
+// "Check ATS" — score the generated resume against the JD to verify the tailoring helped.
+function renderCheckAts(container, filePath, jobDescription) {
+  const wrap = document.createElement('div');
+  wrap.className = 'checkats';
+  wrap.innerHTML = `<button class="btn small primary" data-check>✅ Check ATS score of this resume</button>
+    <span class="checkats-status status-inline"></span>
+    <div class="checkats-result"></div>`;
+  const btn = wrap.querySelector('[data-check]');
+  const statusEl = wrap.querySelector('.checkats-status');
+  const resultEl = wrap.querySelector('.checkats-result');
+  btn.addEventListener('click', async () => {
+    const a = activeProvider();
+    btn.disabled = true;
+    statusEl.textContent = 'Scoring the generated resume…';
+    const res = await window.api.checkResumeAts({
+      provider: a.provider,
+      apiKey: a.apiKey,
+      baseUrl: a.baseUrl,
+      model: a.model,
+      jobDescription,
+      filePath,
+      ...activePrice(),
+    });
+    btn.disabled = false;
+    if (!res.ok) {
+      statusEl.textContent = '⚠ ' + res.error;
+      return;
+    }
+    statusEl.textContent = res.usage ? `used ${fmtUsage(res.usage)}` : '';
+    renderAtsScore(resultEl, res);
+    setStatus(`Tailored resume ATS score: ${res.ats_score}`);
+    refreshUsage();
+  });
+  container.appendChild(wrap);
+}
+
+function renderAtsScore(container, r) {
+  const c = scoreColor(r.ats_score);
+  const matched = (r.matched_keywords || []).slice(0, 30);
+  const missing = (r.missing_keywords || []).slice(0, 30);
+  container.innerHTML = `
+    <div class="ats-head">
+      <div class="score" style="background:${c.bg};box-shadow:inset 0 0 0 3px ${c.ring};color:${c.text}"><span>${r.ats_score}</span></div>
+      <div class="ats-verdict">${escapeHtml(r.verdict || '')}</div>
+    </div>
+    ${renderBreakdown(r.categories)}
+    ${matched.length ? `<div class="detail-block"><h4>Matched keywords (${matched.length})</h4><div class="chips">${matched.map((k) => `<span class="chip match">${escapeHtml(k)}</span>`).join('')}</div></div>` : ''}
+    ${missing.length ? `<div class="detail-block"><h4>Missing keywords (${missing.length})</h4><div class="chips">${missing.map((k) => `<span class="chip miss">${escapeHtml(k)}</span>`).join('')}</div></div>` : ''}
+    ${r.gaps ? `<div class="detail-block"><h4>Remaining gaps</h4><div class="detail-text">${escapeHtml(r.gaps)}</div></div>` : ''}`;
+}
 
 let lastCoverLetter = null; // structured letter from the latest generation, for on-demand saving
 
@@ -624,7 +703,7 @@ function renderCoverPreview(text) {
     const res = await window.api.saveCoverLetter({
       letter: lastCoverLetter,
       baseFilePath: els.baseResume.value,
-      outDir: state.directory,
+      outDir: effectiveOutputDir(),
     });
     ev.target.disabled = false;
     ev.target.textContent = '💾 Save .docx + .pdf';

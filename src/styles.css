@@ -447,6 +447,11 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   flex: 0 0 auto;
 }
 .gen-result .file-line { margin-bottom: 8px; }
+.checkats { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.checkats-status { margin-left: 10px; }
+.checkats-result:not(:empty) { margin-top: 14px; }
+.ats-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.ats-verdict { font-size: 13.5px; color: var(--muted); }
 .cover-actions { display: flex; gap: 8px; align-items: center; }
 .cover-files { margin-top: 10px; }
 .cover-files .file-line { margin-bottom: 6px; }
