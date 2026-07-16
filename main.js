@@ -79,6 +79,23 @@ async function saveSettings(settings) {
 }
 
 // ---------------------------------------------------------------------------
+// Debug logging (appended to a file in the user-data folder)
+// ---------------------------------------------------------------------------
+const LOG_FILE = () => path.join(app.getPath('userData'), 'debug.log');
+
+async function logLine(level, msg, extra) {
+  let line = `[${new Date().toISOString()}] ${level}  ${msg}`;
+  if (extra !== undefined) {
+    line += '  ' + (typeof extra === 'string' ? extra : JSON.stringify(extra));
+  }
+  try {
+    await fsp.appendFile(LOG_FILE(), line + '\n', 'utf8');
+  } catch {
+    /* logging is best-effort */
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
 let mainWindow = null;
@@ -169,7 +186,9 @@ async function fetchModels({ provider, apiKey, baseUrl }) {
 }
 
 // Returns the assistant's raw text content, regardless of provider.
-async function chatComplete({ provider, apiKey, baseUrl, model, system, user }) {
+// maxTokens must be generous: reasoning models spend much of the budget "thinking"
+// before emitting the answer, so a low cap truncates the JSON (finish_reason=length).
+async function chatComplete({ provider, apiKey, baseUrl, model, system, user, maxTokens = 8000 }) {
   const base = trimTrailingSlash(baseUrl);
 
   if (provider === 'anthropic') {
@@ -182,7 +201,7 @@ async function chatComplete({ provider, apiKey, baseUrl, model, system, user }) 
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1400,
+        max_tokens: maxTokens,
         temperature: 0.1,
         system,
         messages: [{ role: 'user', content: user }],
@@ -198,6 +217,7 @@ async function chatComplete({ provider, apiKey, baseUrl, model, system, user }) 
       : '';
     return {
       text,
+      finishReason: json.stop_reason || '',
       usage: { inTokens: json.usage?.input_tokens || 0, outTokens: json.usage?.output_tokens || 0 },
     };
   }
@@ -208,7 +228,7 @@ async function chatComplete({ provider, apiKey, baseUrl, model, system, user }) 
     { role: 'user', content: user },
   ];
   const call = (withJsonFormat) => {
-    const body = { model, messages, temperature: 0.1, max_tokens: 1400 };
+    const body = { model, messages, temperature: 0.1, max_tokens: maxTokens };
     if (withJsonFormat) body.response_format = { type: 'json_object' };
     return fetch(`${base}/chat/completions`, {
       method: 'POST',
@@ -223,8 +243,10 @@ async function chatComplete({ provider, apiKey, baseUrl, model, system, user }) 
     throw new Error(`API ${res.status}: ${t.slice(0, 300)}`);
   }
   const json = await res.json();
+  const choice = json?.choices?.[0];
   return {
-    text: json?.choices?.[0]?.message?.content || '',
+    text: choice?.message?.content || '',
+    finishReason: choice?.finish_reason || '',
     usage: { inTokens: json.usage?.prompt_tokens || 0, outTokens: json.usage?.completion_tokens || 0 },
   };
 }
@@ -313,6 +335,8 @@ function dedup(list) {
 function extractJson(text) {
   if (!text) return null;
   let t = text.trim();
+  // Reasoning models sometimes prefix their answer with a think/reasoning block.
+  t = t.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '').trim();
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) t = fence[1].trim();
   try {
@@ -332,7 +356,7 @@ function extractJson(text) {
 }
 
 async function scoreResume(params) {
-  const { text, usage } = await chatComplete({
+  const { text, usage, finishReason } = await chatComplete({
     provider: params.provider,
     apiKey: params.apiKey,
     baseUrl: params.baseUrl,
@@ -343,7 +367,18 @@ async function scoreResume(params) {
 
   const parsed = extractJson(text);
   if (!parsed || !parsed.categories || typeof parsed.categories !== 'object') {
-    throw new Error('Could not parse a valid JSON score from the model response.');
+    await logLine('ERROR', `scoreResume JSON parse failed`, {
+      model: params.model,
+      finishReason,
+      contentLength: text.length,
+      rawResponse: text.slice(0, 6000),
+    });
+    const snippet = text.trim().slice(0, 140).replace(/\s+/g, ' ');
+    throw new Error(
+      text.trim()
+        ? `Model didn't return valid JSON (finish=${finishReason || '?'}). Got: "${snippet}…"`
+        : `Model returned an empty response (finish=${finishReason || '?'}). Try a higher token limit or a different model.`
+    );
   }
 
   const categories = {};
@@ -425,6 +460,7 @@ async function analyze(event, params) {
         Object.assign(record, scored, { ok: true });
       } catch (err) {
         Object.assign(record, { ok: false, error: err.message || String(err), ats_score: -1 });
+        await logLine('ERROR', `analyze failed for ${file}`, err.message || String(err));
       }
       results.push(record);
       done++;
@@ -1127,6 +1163,7 @@ ipcMain.handle('resume:generate', async (_e, params) => {
   try {
     return { ok: true, ...(await generateResume(params)) };
   } catch (err) {
+    await logLine('ERROR', 'resume:generate failed', err.message || String(err));
     return { ok: false, error: err.message };
   }
 });
@@ -1135,6 +1172,7 @@ ipcMain.handle('cover:generate', async (_e, params) => {
   try {
     return { ok: true, ...(await generateCoverLetter(params)) };
   } catch (err) {
+    await logLine('ERROR', 'cover:generate failed', err.message || String(err));
     return { ok: false, error: err.message };
   }
 });
@@ -1153,6 +1191,7 @@ ipcMain.handle('qa:answer', async (_e, params) => {
     const questions = await recordQuestions(params.questions); // remember for frequency/pinning
     return { ok: true, answers, questions, usage };
   } catch (err) {
+    await logLine('ERROR', 'qa:answer failed', err.message || String(err));
     return { ok: false, error: err.message };
   }
 });
