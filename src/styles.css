@@ -447,6 +447,23 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   flex: 0 0 auto;
 }
 .gen-result .file-line { margin-bottom: 8px; }
+.missing-skills { margin: 10px 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
+.ms-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12.5px; font-weight: 600; }
+.ms-actions { display: flex; gap: 6px; }
+.ms-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ms-chip {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.ms-chip.selected { background: rgba(53, 208, 127, 0.15); border-color: rgba(53, 208, 127, 0.5); color: #9df0c3; }
+.ms-chip:hover { border-color: var(--accent); }
+
 .checkats { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
 .checkats-status { margin-left: 10px; }
 .checkats-result:not(:empty) { margin-top: 14px; }

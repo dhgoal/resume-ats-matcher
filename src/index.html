@@ -159,7 +159,20 @@
               <h3>✨ Generate a tailored resume</h3>
               <button id="genResume" class="btn primary">Generate .docx + .pdf</button>
             </div>
-            <p class="hint">Rewrites your base resume to match the job description (keyword emphasis, targeted summary), keeping the <strong>same font, size, margins and heading style</strong> as your source resume — without inventing experience. Saves a <code>.docx</code> and a <code>.pdf</code> in your resumes folder.</p>
+            <p class="hint">Rewrites your base resume to match the job description (keyword emphasis, targeted summary), keeping the <strong>same font, size, margins and heading style</strong> as your source resume — without inventing experience. Auto-sized to fit one page. Saves a <code>.docx</code> and a <code>.pdf</code>.</p>
+
+            <div id="missingSkillsWrap" class="missing-skills hidden">
+              <div class="ms-head">
+                <span>Missing keywords to add <span id="msCount" class="muted"></span></span>
+                <span class="ms-actions">
+                  <button id="msAll" class="btn small">Select all</button>
+                  <button id="msNone" class="btn small">None</button>
+                </span>
+              </div>
+              <p class="hint">Only the keywords you keep selected will be added to the tailored resume.</p>
+              <div id="missingSkills" class="ms-chips"></div>
+            </div>
+
             <div id="genStatus" class="status-inline"></div>
             <div id="genResult" class="gen-result hidden"></div>
           </div>

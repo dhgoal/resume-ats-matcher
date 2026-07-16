@@ -60,6 +60,11 @@ const els = {
   resetOutput: $('resetOutput'),
   tailorEmpty: $('tailorEmpty'),
   tailorBody: $('tailorBody'),
+  missingSkillsWrap: $('missingSkillsWrap'),
+  missingSkills: $('missingSkills'),
+  msCount: $('msCount'),
+  msAll: $('msAll'),
+  msNone: $('msNone'),
   questionsEmpty: $('questionsEmpty'),
   questionsBody: $('questionsBody'),
   usageTotals: $('usageTotals'),
@@ -488,6 +493,7 @@ function populateTools(ok) {
     els.baseResume.appendChild(opt);
   });
   els.baseResume.value = ok[0].filePath; // default: best match
+  renderMissingSkills(ok[0].filePath);
 
   const top = ok[0].ats_score;
   els.genResult.classList.add('hidden');
@@ -510,6 +516,51 @@ function populateTools(ok) {
   els.contextBar.classList.toggle('hidden', activeTab === 'analyze');
   refreshSavedQuestions();
 }
+
+// Missing-keyword chips: pick which of the base resume's gaps to add to the tailored version.
+let selectedSkills = new Set();
+
+function renderMissingSkills(baseFilePath) {
+  const base = lastResults.find((r) => r.filePath === baseFilePath);
+  const kws = base && Array.isArray(base.missing_keywords) ? base.missing_keywords : [];
+  selectedSkills = new Set(kws); // default: all selected
+  if (kws.length === 0) {
+    els.missingSkillsWrap.classList.add('hidden');
+    els.missingSkills.innerHTML = '';
+    return;
+  }
+  els.missingSkillsWrap.classList.remove('hidden');
+  els.missingSkills.innerHTML = '';
+  for (const kw of kws) {
+    const chip = document.createElement('button');
+    chip.className = 'ms-chip selected';
+    chip.textContent = kw;
+    chip.addEventListener('click', () => {
+      if (chip.classList.toggle('selected')) selectedSkills.add(kw);
+      else selectedSkills.delete(kw);
+      updateMsCount();
+    });
+    els.missingSkills.appendChild(chip);
+  }
+  updateMsCount();
+}
+function updateMsCount() {
+  els.msCount.textContent = `(${selectedSkills.size} selected)`;
+}
+els.msAll.addEventListener('click', () => {
+  selectedSkills = new Set();
+  for (const chip of els.missingSkills.querySelectorAll('.ms-chip')) {
+    chip.classList.add('selected');
+    selectedSkills.add(chip.textContent);
+  }
+  updateMsCount();
+});
+els.msNone.addEventListener('click', () => {
+  selectedSkills = new Set();
+  for (const chip of els.missingSkills.querySelectorAll('.ms-chip')) chip.classList.remove('selected');
+  updateMsCount();
+});
+els.baseResume.addEventListener('change', () => renderMissingSkills(els.baseResume.value));
 
 // Render a "saved: <file> [Open] [Show in folder]" line for each output file.
 function renderFileLinks(container, files) {
@@ -561,7 +612,6 @@ els.genResume.addEventListener('click', async () => {
   els.genResult.classList.add('hidden');
   els.genStatus.textContent = 'Generating tailored resume (.docx + .pdf)…';
   setStatus('Generating tailored resume…');
-  const base = lastResults.find((r) => r.filePath === ctx.baseFilePath);
   const res = await window.api.generateResume({
     provider: ctx.a.provider,
     apiKey: ctx.a.apiKey,
@@ -570,7 +620,7 @@ els.genResume.addEventListener('click', async () => {
     jobDescription: ctx.jobDescription,
     baseFilePath: ctx.baseFilePath,
     outDir: effectiveOutputDir(),
-    targetKeywords: base ? base.missing_keywords : [],
+    targetKeywords: [...selectedSkills],
     ...activePrice(),
   });
   els.genResume.disabled = false;

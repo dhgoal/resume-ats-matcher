@@ -553,8 +553,9 @@ function buildGenPrompt(jobDescription, resumeText, targetKeywords) {
 }
 Requirements:
 - ALWAYS include "title" (the professional headline) — never leave it blank.
-- In every Experience bullet, wrap the most important skills/technologies/keywords in **double asterisks** so they render bold. Only bold genuine keywords, a few per bullet.
-- Keep it to ONE page: at most 3-4 tight bullets per role, a 2-3 sentence summary, and only the most relevant roles in full detail.
+- Each Experience role MUST have EXACTLY 5 or 6 bullet points — never 4 or fewer, never 7 or more.
+- In each Experience bullet, wrap the most important skills/technologies/keywords in **double asterisks** so they render bold (a few genuine keywords per bullet). Do NOT use ** anywhere in the summary.
+- Write a 2-3 sentence summary. The app auto-sizes the text to fit a single page, so keep all 5-6 bullets per role — do not drop bullets to save space.
 - Use "bullets" for lists (Skills, Certifications) and "entries" for Experience/Education/Projects. Keep the same section headings/ordering as the source.
 ${kwBlock}
 === JOB DESCRIPTION ===
@@ -642,18 +643,22 @@ async function extractDocxStyle(filePath) {
   }
 }
 
-// Font sizes are relative to the source resume's base size.
-function sizeSet(style) {
-  const base = style.fontSizePt || 11;
-  const hp = (pt) => Math.round(pt * 2); // docx sizes are in half-points
+// Font sizes are relative to the source resume's base size, times a fit-to-page scale.
+function sizeSet(style, scale = 1) {
+  const u = style.fontSizePt || 11;
+  const hp = (pt) => Math.round(pt * 2 * scale); // docx sizes are in half-points
   return {
-    basePt: base,
-    body: hp(base),
-    name: hp(base + 7),
-    contact: hp(base - 1),
-    heading: hp(base + 1),
-    date: hp(base - 1),
+    basePt: u * scale,
+    body: hp(u),
+    name: hp(u + 7),
+    contact: hp(u - 1),
+    heading: hp(u + 1),
+    date: hp(u - 1),
   };
+}
+
+function stripBold(text) {
+  return String(text == null ? '' : text).replace(/\*\*([^*]+)\*\*/g, '$1');
 }
 
 // Split "text with **bold** parts" into docx TextRuns.
@@ -666,8 +671,9 @@ function boldRuns(text, opts) {
   });
 }
 
-function buildResumeDocx(r, style) {
-  const s = sizeSet(style);
+function buildResumeDocx(r, style, scale = 1) {
+  const s = sizeSet(style, scale);
+  const sp = (v) => Math.max(1, Math.round(v * scale)); // scale paragraph spacing too
   const font = style.fontFamily;
   const hStyle = style.heading || DEFAULT_STYLE.heading;
   const children = [];
@@ -675,7 +681,7 @@ function buildResumeDocx(r, style) {
   children.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 20 },
+      spacing: { after: sp(20) },
       children: [new TextRun({ text: str(r.name) || 'Candidate', bold: true, size: s.name, font })],
     })
   );
@@ -683,7 +689,7 @@ function buildResumeDocx(r, style) {
     children.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { after: 20 },
+        spacing: { after: sp(20) },
         children: [new TextRun({ text: str(r.title), size: s.heading, color: '333333', font })],
       })
     );
@@ -692,18 +698,18 @@ function buildResumeDocx(r, style) {
     children.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { after: 90 },
+        spacing: { after: sp(90) },
         children: [new TextRun({ text: str(r.contact), size: s.contact, color: '444444', font })],
       })
     );
   }
   if (str(r.summary)) {
-    children.push(sectionHeading('Summary', s, hStyle, font));
+    children.push(sectionHeading('Summary', s, hStyle, font, sp));
     children.push(
       new Paragraph({
         alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: 90 },
-        children: boldRuns(str(r.summary), { size: s.body, font }),
+        spacing: { after: sp(90) },
+        children: [new TextRun({ text: stripBold(r.summary), size: s.body, font })],
       })
     );
   }
@@ -711,7 +717,7 @@ function buildResumeDocx(r, style) {
   for (const section of Array.isArray(r.sections) ? r.sections : []) {
     const heading = str(section.heading);
     if (!heading) continue;
-    children.push(sectionHeading(heading, s, hStyle, font));
+    children.push(sectionHeading(heading, s, hStyle, font, sp));
 
     if (section.type === 'entries' && Array.isArray(section.entries)) {
       for (const e of section.entries) {
@@ -719,7 +725,7 @@ function buildResumeDocx(r, style) {
         const date = str(e.date);
         children.push(
           new Paragraph({
-            spacing: { before: 60, after: 10 },
+            spacing: { before: sp(60), after: sp(10) },
             children: [
               new TextRun({ text: line, bold: true, size: s.body, font }),
               date
@@ -733,7 +739,7 @@ function buildResumeDocx(r, style) {
             new Paragraph({
               bullet: { level: 0 },
               alignment: AlignmentType.JUSTIFIED,
-              spacing: { after: 10 },
+              spacing: { after: sp(10) },
               children: boldRuns(b, { size: s.body, font }),
             })
           );
@@ -745,7 +751,7 @@ function buildResumeDocx(r, style) {
           new Paragraph({
             bullet: { level: 0 },
             alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: 10 },
+            spacing: { after: sp(10) },
             children: boldRuns(item, { size: s.body, font }),
           })
         );
@@ -759,10 +765,10 @@ function buildResumeDocx(r, style) {
   });
 }
 
-function sectionHeading(text, s, h, font) {
+function sectionHeading(text, s, h, font, sp = (v) => v) {
   const para = {
     heading: HeadingLevel.HEADING_2,
-    spacing: { before: 160, after: 40 },
+    spacing: { before: sp(160), after: sp(40) },
     children: [
       new TextRun({
         text: h.caps ? text.toUpperCase() : text,
@@ -791,17 +797,18 @@ function escBold(text) {
   return esc(text).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 }
 
-function buildResumeHtml(r, style) {
-  const base = style.fontSizePt || 11;
+function buildResumeHtml(r, style, scale = 1) {
+  const base = (style.fontSizePt || 11) * scale;
+  const q = (pt) => +(pt * scale).toFixed(2); // scale a pt measurement
   const font = style.fontFamily;
   const h = style.heading || DEFAULT_STYLE.heading;
   const headCss = [
-    `font-size:${(h.sizePt || base + 1)}pt`,
+    `font-size:${h.sizePt ? q(h.sizePt) : base + q(1)}pt`,
     `font-weight:${h.bold !== false ? 'bold' : 'normal'}`,
     `color:${h.color ? '#' + h.color : '#111'}`,
     `text-transform:${h.caps ? 'uppercase' : 'none'}`,
     `text-decoration:${h.underline ? 'underline' : 'none'}`,
-    h.border ? 'border-bottom:1px solid #aaa;padding-bottom:2pt' : '',
+    h.border ? `border-bottom:1px solid #aaa;padding-bottom:${q(2)}pt` : '',
   ]
     .filter(Boolean)
     .join(';');
@@ -828,23 +835,53 @@ function buildResumeHtml(r, style) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     * { box-sizing: border-box; }
     body { font-family: '${esc(font)}', Calibri, Arial, sans-serif; font-size: ${base}pt; color: #111; margin: 0; line-height: 1.3; }
-    .name { text-align: center; font-size: ${base + 7}pt; font-weight: bold; margin: 0 0 1pt; }
-    .title { text-align: center; font-size: ${base + 1}pt; color: #333; margin: 0 0 2pt; }
-    .contact { text-align: center; font-size: ${base - 1}pt; color: #444; margin: 0 0 7pt; }
-    h2 { ${headCss}; margin: 9pt 0 3pt; }
-    p.summary { margin: 0 0 6pt; text-align: justify; }
-    .entry { margin: 0 0 5pt; }
+    .name { text-align: center; font-size: ${base + q(7)}pt; font-weight: bold; margin: 0 0 ${q(1)}pt; }
+    .title { text-align: center; font-size: ${base + q(1)}pt; color: #333; margin: 0 0 ${q(2)}pt; }
+    .contact { text-align: center; font-size: ${base - q(1)}pt; color: #444; margin: 0 0 ${q(7)}pt; }
+    h2 { ${headCss}; margin: ${q(9)}pt 0 ${q(3)}pt; }
+    p.summary { margin: 0 0 ${q(6)}pt; text-align: justify; }
+    .entry { margin: 0 0 ${q(5)}pt; }
     .etitle { font-weight: bold; }
     .date { font-weight: normal; font-style: italic; color: #555; }
-    ul { margin: 1pt 0 5pt; padding-left: 16pt; }
-    li { margin: 0 0 1.5pt; text-align: justify; }
+    ul { margin: ${q(1)}pt 0 ${q(5)}pt; padding-left: ${q(16)}pt; }
+    li { margin: 0 0 ${q(1.5)}pt; text-align: justify; }
   </style></head><body>
     <div class="name">${esc(r.name) || 'Candidate'}</div>
     ${str(r.title) ? `<div class="title">${esc(r.title)}</div>` : ''}
     ${str(r.contact) ? `<div class="contact">${esc(r.contact)}</div>` : ''}
-    ${str(r.summary) ? `<h2>Summary</h2><p class="summary">${escBold(r.summary)}</p>` : ''}
+    ${str(r.summary) ? `<h2>Summary</h2><p class="summary">${esc(stripBold(r.summary))}</p>` : ''}
     ${sectionsHtml}
   </body></html>`;
+}
+
+// Measure how tall the resume renders (in inches) at the given content width,
+// so we can scale it down to fit one page.
+async function measureContentHeightIn(html, contentWidthIn) {
+  const win = new BrowserWindow({
+    show: false,
+    width: Math.max(200, Math.round(contentWidthIn * 96)),
+    height: 1400,
+  });
+  try {
+    await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    const px = await win.webContents.executeJavaScript(
+      'Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)'
+    );
+    return px / 96; // 96 CSS px per inch
+  } finally {
+    win.destroy();
+  }
+}
+
+// Find the largest scale (<=1) that fits the content on one page.
+async function fitScale(parsed, style) {
+  const contentWidthIn = 8.5 - (style.margins.left + style.margins.right) / 1440;
+  const contentHeightIn = 11 - (style.margins.top + style.margins.bottom) / 1440;
+  const neededIn = await measureContentHeightIn(buildResumeHtml(parsed, style, 1), contentWidthIn);
+  if (neededIn <= contentHeightIn) return 1;
+  // shrinking font reduces height a bit faster than linearly; clamp to a readable floor
+  const scale = (contentHeightIn / neededIn) * 0.98;
+  return Math.max(0.62, Math.min(1, scale));
 }
 
 async function htmlToPdf(html, margins, outPath) {
@@ -903,11 +940,14 @@ async function generateResume(params) {
   const dir = outDir || path.dirname(baseFilePath);
   const baseName = `Tailored - ${sanitizeFilename(parsed.name)} - ${timestamp()}`;
 
+  // Auto-shrink font/spacing so the resume fits on a single page.
+  const scale = await fitScale(parsed, style);
+
   const docxPath = path.join(dir, baseName + '.docx');
-  await fsp.writeFile(docxPath, await Packer.toBuffer(buildResumeDocx(parsed, style)));
+  await fsp.writeFile(docxPath, await Packer.toBuffer(buildResumeDocx(parsed, style, scale)));
 
   const pdfPath = path.join(dir, baseName + '.pdf');
-  await htmlToPdf(buildResumeHtml(parsed, style), style.margins, pdfPath);
+  await htmlToPdf(buildResumeHtml(parsed, style, scale), style.margins, pdfPath);
 
   const usageRec = await recordUsage({
     op: 'Tailored resume',
