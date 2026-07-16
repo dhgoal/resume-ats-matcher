@@ -137,25 +137,17 @@ function trimTrailingSlash(url) {
   return (url || '').replace(/\/+$/, '');
 }
 
-// Some providers (notably Chutes) return per-token USD pricing in /v1/models.
-// Values are USD *per token*; we convert to USD per 1,000,000 tokens for display.
+// Chutes /v1/models reports pricing already in USD per 1,000,000 tokens
+// (e.g. price.input.usd = 1.0 means $1.00 / 1M tokens). Use the values as-is.
 function numOrNull(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
-function perMillion(v) {
-  const n = numOrNull(v);
-  return n == null ? null : n * 1e6;
-}
 function inputPriceOf(m) {
-  return perMillion(
-    m?.price?.input?.usd ?? m?.pricing?.prompt ?? m?.price?.input ?? m?.input_price ?? m?.prompt_price
-  );
+  return numOrNull(m?.price?.input?.usd ?? m?.pricing?.prompt ?? m?.input_price ?? m?.prompt_price);
 }
 function outputPriceOf(m) {
-  return perMillion(
-    m?.price?.output?.usd ?? m?.pricing?.completion ?? m?.price?.output ?? m?.output_price ?? m?.completion_price
-  );
+  return numOrNull(m?.price?.output?.usd ?? m?.pricing?.completion ?? m?.output_price ?? m?.completion_price);
 }
 
 async function fetchModels({ provider, apiKey, baseUrl }) {
@@ -201,9 +193,13 @@ async function chatComplete({ provider, apiKey, baseUrl, model, system, user }) 
       throw new Error(`API ${res.status}: ${t.slice(0, 300)}`);
     }
     const json = await res.json();
-    return Array.isArray(json.content)
+    const text = Array.isArray(json.content)
       ? json.content.filter((b) => b.type === 'text').map((b) => b.text).join('')
       : '';
+    return {
+      text,
+      usage: { inTokens: json.usage?.input_tokens || 0, outTokens: json.usage?.output_tokens || 0 },
+    };
   }
 
   // OpenAI-compatible: Chutes and OpenAI.
@@ -227,7 +223,10 @@ async function chatComplete({ provider, apiKey, baseUrl, model, system, user }) 
     throw new Error(`API ${res.status}: ${t.slice(0, 300)}`);
   }
   const json = await res.json();
-  return json?.choices?.[0]?.message?.content || '';
+  return {
+    text: json?.choices?.[0]?.message?.content || '',
+    usage: { inTokens: json.usage?.prompt_tokens || 0, outTokens: json.usage?.completion_tokens || 0 },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -333,7 +332,7 @@ function extractJson(text) {
 }
 
 async function scoreResume(params) {
-  const text = await chatComplete({
+  const { text, usage } = await chatComplete({
     provider: params.provider,
     apiKey: params.apiKey,
     baseUrl: params.baseUrl,
@@ -381,6 +380,7 @@ async function scoreResume(params) {
     strengths: str(parsed.strengths),
     gaps: str(parsed.gaps),
     verdict: str(parsed.verdict),
+    _usage: usage,
   };
 }
 
@@ -407,6 +407,8 @@ async function analyze(event, params) {
   const results = [];
   let index = 0;
   let done = 0;
+  let inTokens = 0;
+  let outTokens = 0;
 
   async function worker() {
     while (index < files.length) {
@@ -416,11 +418,11 @@ async function analyze(event, params) {
       try {
         const resumeText = await extractDocxText(filePath);
         if (!resumeText || resumeText.length < 20) throw new Error('Resume text was empty or unreadable.');
-        Object.assign(
-          record,
-          await scoreResume({ provider, apiKey, baseUrl, model, jobDescription, resumeText }),
-          { ok: true }
-        );
+        const scored = await scoreResume({ provider, apiKey, baseUrl, model, jobDescription, resumeText });
+        inTokens += scored._usage?.inTokens || 0;
+        outTokens += scored._usage?.outTokens || 0;
+        delete scored._usage;
+        Object.assign(record, scored, { ok: true });
       } catch (err) {
         Object.assign(record, { ok: false, error: err.message || String(err), ats_score: -1 });
       }
@@ -439,7 +441,16 @@ async function analyze(event, params) {
   });
 
   send({ type: 'done', total: files.length });
-  return results;
+  const usage = await recordUsage({
+    op: `Analyze (${files.length} resume${files.length === 1 ? '' : 's'})`,
+    provider,
+    model,
+    inTokens,
+    outTokens,
+    inPrice: params.inPrice,
+    outPrice: params.outPrice,
+  });
+  return { results, usage };
 }
 
 // ---------------------------------------------------------------------------
@@ -714,7 +725,7 @@ async function generateResume(params) {
   if (!resumeText || resumeText.length < 20) throw new Error('Base resume text was empty or unreadable.');
 
   const style = await extractDocxStyle(baseFilePath);
-  const text = await chatComplete({
+  const { text, usage } = await chatComplete({
     provider,
     apiKey,
     baseUrl,
@@ -736,7 +747,16 @@ async function generateResume(params) {
   const pdfPath = path.join(dir, baseName + '.pdf');
   await htmlToPdf(buildResumeHtml(parsed, style), style.margins, pdfPath);
 
-  return { docxPath, pdfPath, name: str(parsed.name) || 'Candidate' };
+  const usageRec = await recordUsage({
+    op: 'Tailored resume',
+    provider,
+    model,
+    inTokens: usage.inTokens,
+    outTokens: usage.outTokens,
+    inPrice: params.inPrice,
+    outPrice: params.outPrice,
+  });
+  return { docxPath, pdfPath, name: str(parsed.name) || 'Candidate', usage: usageRec };
 }
 
 // ---------------------------------------------------------------------------
@@ -779,7 +799,7 @@ async function answerQuestions(params) {
   const resumeText = await extractDocxText(baseFilePath);
   if (!resumeText || resumeText.length < 20) throw new Error('Base resume text was empty or unreadable.');
 
-  const text = await chatComplete({
+  const { text, usage } = await chatComplete({
     provider,
     apiKey,
     baseUrl,
@@ -791,10 +811,22 @@ async function answerQuestions(params) {
   let answers = parsed && Array.isArray(parsed.answers) ? parsed.answers : null;
   if (!answers) throw new Error('The model did not return usable answers. Try again.');
 
-  return answers.map((a, i) => ({
-    question: str(a.question) || qs[i] || `Question ${i + 1}`,
-    answer: str(a.answer),
-  }));
+  const usageRec = await recordUsage({
+    op: `Answer ${qs.length} question${qs.length === 1 ? '' : 's'}`,
+    provider,
+    model,
+    inTokens: usage.inTokens,
+    outTokens: usage.outTokens,
+    inPrice: params.inPrice,
+    outPrice: params.outPrice,
+  });
+  return {
+    answers: answers.map((a, i) => ({
+      question: str(a.question) || qs[i] || `Question ${i + 1}`,
+      answer: str(a.answer),
+    })),
+    usage: usageRec,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -886,8 +918,7 @@ async function generateCoverLetter(params) {
   const resumeText = await extractDocxText(baseFilePath);
   if (!resumeText || resumeText.length < 20) throw new Error('Base resume text was empty or unreadable.');
 
-  const style = await extractDocxStyle(baseFilePath);
-  const text = await chatComplete({
+  const { text, usage } = await chatComplete({
     provider,
     apiKey,
     baseUrl,
@@ -900,8 +931,17 @@ async function generateCoverLetter(params) {
     throw new Error('The model did not return a usable cover letter. Try again.');
   }
 
-  // Return the letter for preview; files are written only on demand via saveCoverLetter.
-  return { letter: parsed, text: coverLetterText(parsed) };
+  const usageRec = await recordUsage({
+    op: 'Cover letter',
+    provider,
+    model,
+    inTokens: usage.inTokens,
+    outTokens: usage.outTokens,
+    inPrice: params.inPrice,
+    outPrice: params.outPrice,
+  });
+  // Files are written only on demand via saveCoverLetter; return the letter for preview.
+  return { letter: parsed, text: coverLetterText(parsed), usage: usageRec };
 }
 
 async function saveCoverLetter(params) {
@@ -994,6 +1034,56 @@ async function deleteQuestion(id) {
 }
 
 // ---------------------------------------------------------------------------
+// Token-usage history (exact counts from each API response + computed cost)
+// ---------------------------------------------------------------------------
+const USAGE_FILE = () => path.join(app.getPath('userData'), 'usage.json');
+
+async function loadUsage() {
+  try {
+    const list = JSON.parse(await fsp.readFile(USAGE_FILE(), 'utf8'));
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+async function clearUsage() {
+  await fsp.writeFile(USAGE_FILE(), '[]', 'utf8');
+  return [];
+}
+
+// prices are USD per 1,000,000 tokens (or null when the provider doesn't report them)
+function computeCost(inTokens, outTokens, inPrice, outPrice) {
+  if (inPrice == null && outPrice == null) return null;
+  return (inTokens / 1e6) * (inPrice || 0) + (outTokens / 1e6) * (outPrice || 0);
+}
+
+async function recordUsage({ op, provider, model, inTokens, outTokens, inPrice, outPrice }) {
+  const inP = numOrNull(inPrice);
+  const outP = numOrNull(outPrice);
+  const record = {
+    ts: Date.now(),
+    op,
+    provider,
+    model,
+    inTokens: inTokens || 0,
+    outTokens: outTokens || 0,
+    totalTokens: (inTokens || 0) + (outTokens || 0),
+    cost: computeCost(inTokens || 0, outTokens || 0, inP, outP),
+  };
+  const list = await loadUsage();
+  list.push(record);
+  // keep the file bounded
+  const trimmed = list.slice(-1000);
+  try {
+    await fsp.writeFile(USAGE_FILE(), JSON.stringify(trimmed, null, 2), 'utf8');
+  } catch {
+    /* usage logging is best-effort; never fail the operation over it */
+  }
+  return record;
+}
+
+// ---------------------------------------------------------------------------
 // IPC
 // ---------------------------------------------------------------------------
 ipcMain.handle('settings:get', async () => loadSettings());
@@ -1026,7 +1116,8 @@ ipcMain.handle('models:fetch', async (_e, params) => {
 
 ipcMain.handle('analyze:run', async (event, params) => {
   try {
-    return { ok: true, results: await analyze(event, params) };
+    const { results, usage } = await analyze(event, params);
+    return { ok: true, results, usage };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -1058,13 +1149,16 @@ ipcMain.handle('cover:save', async (_e, params) => {
 
 ipcMain.handle('qa:answer', async (_e, params) => {
   try {
-    const answers = await answerQuestions(params);
+    const { answers, usage } = await answerQuestions(params);
     const questions = await recordQuestions(params.questions); // remember for frequency/pinning
-    return { ok: true, answers, questions };
+    return { ok: true, answers, questions, usage };
   } catch (err) {
     return { ok: false, error: err.message };
   }
 });
+
+ipcMain.handle('usage:list', async () => loadUsage());
+ipcMain.handle('usage:clear', async () => clearUsage());
 
 ipcMain.handle('questions:list', async () => sortedQuestions(await loadQuestions()));
 ipcMain.handle('questions:pin', async (_e, { id, pinned }) => setQuestionPinned(id, pinned));

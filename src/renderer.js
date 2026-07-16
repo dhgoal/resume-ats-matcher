@@ -54,6 +54,9 @@ const els = {
   tailorBody: $('tailorBody'),
   questionsEmpty: $('questionsEmpty'),
   questionsBody: $('questionsBody'),
+  usageTotals: $('usageTotals'),
+  usageTable: $('usageTable'),
+  clearUsage: $('clearUsage'),
 };
 
 let hasResults = false;
@@ -74,6 +77,7 @@ async function init() {
   loadProviderFields();
   updateEnginePill();
   if (state.directory) refreshCount(state.directory);
+  refreshUsage();
 
   const active = state.providers[state.provider];
   if (!active.apiKey) {
@@ -151,9 +155,32 @@ function activeProvider() {
   return { provider: state.provider, ...state.providers[state.provider] };
 }
 
+function activePrice() {
+  const p = modelPriceMap[state.providers[state.provider].model] || {};
+  return { inPrice: p.inPrice ?? null, outPrice: p.outPrice ?? null };
+}
+
 function updateEnginePill() {
   const a = activeProvider();
-  els.enginePill.textContent = `${PROVIDER_LABELS[a.provider]} · ${a.model || 'no model'}`;
+  const p = modelPriceMap[a.model];
+  let priceStr = '';
+  if (p && (p.inPrice != null || p.outPrice != null)) {
+    priceStr = ` · ${fmtPrice(p.inPrice)}/M in · ${fmtPrice(p.outPrice)}/M out`;
+  }
+  els.enginePill.textContent = `${PROVIDER_LABELS[a.provider]} · ${a.model || 'no model'}${priceStr}`;
+}
+
+function fmtTokens(n) {
+  return (n || 0).toLocaleString('en-US');
+}
+function fmtCost(c) {
+  if (c == null) return '—';
+  return '$' + (c < 0.01 ? c.toFixed(4) : c.toFixed(3));
+}
+function fmtUsage(u) {
+  if (!u) return '';
+  const total = u.totalTokens ?? (u.inTokens || 0) + (u.outTokens || 0);
+  return `${fmtTokens(total)} tokens (${fmtTokens(u.inTokens)} in · ${fmtTokens(u.outTokens)} out) · ${fmtCost(u.cost)}`;
 }
 
 async function persist() {
@@ -192,11 +219,16 @@ function activateTab(name) {
     panel.classList.toggle('active', panel.id === 'tab-' + name);
   }
   // The shared base-resume bar only applies to the tailor/questions tabs.
-  els.contextBar.classList.toggle('hidden', name === 'analyze' || !hasResults);
+  els.contextBar.classList.toggle('hidden', !(hasResults && (name === 'tailor' || name === 'questions')));
+  if (name === 'usage') refreshUsage();
 }
 for (const btn of document.querySelectorAll('.tab')) {
   btn.addEventListener('click', () => activateTab(btn.dataset.tab));
 }
+
+els.clearUsage.addEventListener('click', async () => {
+  renderUsage(await window.api.clearUsage());
+});
 
 els.provider.addEventListener('change', () => {
   syncProviderFields(); // keep edits to the previous provider
@@ -320,6 +352,7 @@ async function runAnalysis() {
     concurrency: state.concurrency,
     directory: state.directory,
     jobDescription,
+    ...activePrice(),
   });
   unsubscribe();
   analyzing = false;
@@ -331,6 +364,8 @@ async function runAnalysis() {
     return;
   }
   renderResults(res.results);
+  if (res.usage) setProgress(100, `Done · used ${fmtUsage(res.usage)}`);
+  refreshUsage();
 }
 
 function setProgress(pct, text) {
@@ -480,17 +515,19 @@ els.genResume.addEventListener('click', async () => {
     jobDescription: ctx.jobDescription,
     baseFilePath: ctx.baseFilePath,
     outDir: state.directory,
+    ...activePrice(),
   });
   els.genResume.disabled = false;
   if (!res.ok) {
     els.genStatus.textContent = '⚠ ' + res.error;
     return;
   }
-  els.genStatus.textContent = '✓ Saved in your resumes folder:';
+  els.genStatus.textContent = `✓ Saved in your resumes folder${res.usage ? ' · used ' + fmtUsage(res.usage) : ''}:`;
   renderFileLinks(els.genResult, [
     { label: 'DOCX', path: res.docxPath },
     { label: 'PDF', path: res.pdfPath },
   ]);
+  refreshUsage();
 });
 
 let lastCoverLetter = null; // structured letter from the latest generation, for on-demand saving
@@ -518,6 +555,7 @@ els.genCover.addEventListener('click', async () => {
     jobDescription: ctx.jobDescription,
     baseFilePath: ctx.baseFilePath,
     companyRole: els.companyRole.value.trim(),
+    ...activePrice(),
   });
   els.genCover.disabled = false;
   if (!res.ok) {
@@ -525,8 +563,9 @@ els.genCover.addEventListener('click', async () => {
     return;
   }
   lastCoverLetter = res.letter;
-  els.coverStatus.textContent = 'Preview below. Regenerate for a different draft, or save when ready.';
+  els.coverStatus.textContent = `Preview below${res.usage ? ' · used ' + fmtUsage(res.usage) : ''}. Regenerate for a different draft, or save when ready.`;
   renderCoverPreview(res.text);
+  refreshUsage();
 });
 
 function renderCoverPreview(text) {
@@ -584,14 +623,16 @@ async function answerAndShow(questions, statusEl) {
     jobDescription: ctx.jobDescription,
     baseFilePath: ctx.baseFilePath,
     questions,
+    ...activePrice(),
   });
   if (!res.ok) {
     statusEl.textContent = '⚠ ' + res.error;
     return;
   }
-  statusEl.textContent = '';
+  statusEl.textContent = res.usage ? `Used ${fmtUsage(res.usage)}` : '';
   renderAnswers(res.answers);
   if (res.questions) renderSavedQuestions(res.questions); // freshly updated frequencies
+  refreshUsage();
 }
 
 function renderAnswers(answers) {
@@ -643,6 +684,53 @@ els.answerPinned.addEventListener('click', async () => {
   }
   els.answerPinned.disabled = false;
 });
+
+// --------------------------------------------------------------------------
+// Usage history
+// --------------------------------------------------------------------------
+async function refreshUsage() {
+  renderUsage(await window.api.listUsage());
+}
+
+function renderUsage(list) {
+  list = Array.isArray(list) ? list : [];
+  const totalTokens = list.reduce((s, r) => s + (r.totalTokens || 0), 0);
+  const totalCost = list.reduce((s, r) => s + (r.cost || 0), 0);
+  const anyCost = list.some((r) => r.cost != null);
+
+  els.usageTotals.innerHTML = list.length
+    ? `<strong>${list.length}</strong> runs · <strong>${fmtTokens(totalTokens)}</strong> tokens · <strong>${anyCost ? fmtCost(totalCost) : '—'}</strong> total`
+    : 'No usage recorded yet.';
+
+  if (list.length === 0) {
+    els.usageTable.innerHTML = '';
+    return;
+  }
+  const rows = [...list]
+    .reverse() // newest first
+    .map((r) => {
+      const d = new Date(r.ts);
+      const when = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      return `<tr>
+        <td>${escapeHtml(when)}</td>
+        <td>${escapeHtml(r.op || '')}</td>
+        <td class="u-model">${escapeHtml(r.model || '')}</td>
+        <td class="u-num">${fmtTokens(r.inTokens)}</td>
+        <td class="u-num">${fmtTokens(r.outTokens)}</td>
+        <td class="u-num">${fmtTokens(r.totalTokens)}</td>
+        <td class="u-num">${fmtCost(r.cost)}</td>
+      </tr>`;
+    })
+    .join('');
+  els.usageTable.innerHTML = `
+    <table class="usage-table">
+      <thead><tr>
+        <th>When</th><th>Operation</th><th>Model</th>
+        <th class="u-num">In</th><th class="u-num">Out</th><th class="u-num">Total</th><th class="u-num">Cost</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
 
 // --------------------------------------------------------------------------
 // Saved question bank

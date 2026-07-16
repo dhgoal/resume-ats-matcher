@@ -73,6 +73,7 @@
       <button class="tab active" data-tab="analyze">1 · Analyze</button>
       <button class="tab" data-tab="tailor">2 · Resume &amp; Cover</button>
       <button class="tab" data-tab="questions">3 · Questions</button>
+      <button class="tab" data-tab="usage">4 · Usage</button>
     </nav>
 
     <!-- Shared base-resume bar (tabs 2 & 3) -->
@@ -170,6 +171,19 @@
             <p class="hint">Questions you answer are saved here with how often they come up. Pin the ones you reuse, then answer them all in one click.</p>
             <div id="savedQuestions" class="saved-list"></div>
           </div>
+        </div>
+      </section>
+
+      <!-- Tab: Usage -->
+      <section id="tab-usage" class="tab-panel">
+        <div class="panel">
+          <div class="results-head">
+            <h2>Token usage &amp; cost</h2>
+            <button id="clearUsage" class="btn small">Clear history</button>
+          </div>
+          <p class="hint">Exact token counts from each API response. Cost is computed from the model's per-million-token price (shown where the provider reports pricing — e.g. Chutes).</p>
+          <div id="usageTotals" class="usage-totals"></div>
+          <div id="usageTable" class="usage-table-wrap"></div>
         </div>
       </section>
     </main>

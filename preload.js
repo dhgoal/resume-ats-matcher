@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   listQuestions: () => ipcRenderer.invoke('questions:list'),
   pinQuestion: (id, pinned) => ipcRenderer.invoke('questions:pin', { id, pinned }),
   deleteQuestion: (id) => ipcRenderer.invoke('questions:delete', id),
+  listUsage: () => ipcRenderer.invoke('usage:list'),
+  clearUsage: () => ipcRenderer.invoke('usage:clear'),
   openFile: (filePath) => ipcRenderer.invoke('file:open', filePath),
   revealFile: (filePath) => ipcRenderer.invoke('file:reveal', filePath),
   onProgress: (callback) => {
