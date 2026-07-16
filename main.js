@@ -107,8 +107,9 @@ function createWindow() {
     height: 860,
     minWidth: 900,
     minHeight: 640,
-    backgroundColor: '#0f1420',
+    backgroundColor: '#eef2f8',
     title: 'Resume ATS Matcher',
+    icon: path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -120,6 +121,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32') app.setAppUserModelId('com.jct.resumeatsmatcher'); // taskbar icon grouping
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "icon": "electron scripts/generate-icon.cjs",
     "dist": "electron-builder --win"
   },
   "author": "",
@@ -15,7 +16,8 @@
     "mammoth": "^1.8.0"
   },
   "devDependencies": {
-    "electron": "^33.2.0"
+    "electron": "^33.2.0",
+    "png-to-ico": "^3.0.2"
   },
   "build": {
     "appId": "com.jct.resumeatsmatcher",
@@ -24,10 +26,12 @@
       "main.js",
       "preload.js",
       "src/**/*",
+      "build/icon.ico",
       "node_modules/**/*"
     ],
     "win": {
-      "target": "portable"
+      "target": "portable",
+      "icon": "build/icon.ico"
     }
   }
 }
