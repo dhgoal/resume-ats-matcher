@@ -522,31 +522,41 @@ async function analyze(event, params) {
 // ---------------------------------------------------------------------------
 const GEN_SYSTEM_PROMPT =
   'You are an expert resume writer and ATS-optimization specialist. You tailor a candidate\'s ' +
-  'EXISTING resume to a specific job description to maximize ATS keyword match — WITHOUT fabricating. ' +
-  'Hard rules: use ONLY the employers, job titles, dates, education, certifications, and skills that ' +
-  'appear in the SOURCE RESUME. Never invent experience, degrees, certifications, employers, or skills ' +
-  'the candidate does not already have. You MAY rephrase bullet points, reorder for relevance, emphasize ' +
-  'the most relevant experience, mirror the job description\'s terminology for skills the candidate ' +
-  'genuinely possesses, and write a targeted professional summary. Preserve the candidate\'s section ' +
-  'structure and overall writing style. Reply with ONLY a single valid JSON object.';
+  'EXISTING resume to a specific job description to maximize ATS keyword match. ' +
+  'Hard rules (never break): keep the real employers, job titles, employment dates, education, and ' +
+  'certifications exactly as in the SOURCE RESUME — never invent a job, employer, degree, date, or credential. ' +
+  'You SHOULD, however, be aggressive about keywords: surface every skill/tool/technology the candidate has ' +
+  'any legitimate or transferable basis for, use the job description\'s exact terminology, add a strong Skills ' +
+  'section covering the role\'s key technologies, and weave those keywords naturally into the experience bullets. ' +
+  'Write a targeted professional headline and summary. Keep it concise enough to fit on ONE page. ' +
+  'Reply with ONLY a single valid JSON object.';
 
-function buildGenPrompt(jobDescription, resumeText) {
+function buildGenPrompt(jobDescription, resumeText, targetKeywords) {
   const jd = jobDescription.slice(0, 8000);
   const resume = resumeText.slice(0, 16000);
+  const missing = (Array.isArray(targetKeywords) ? targetKeywords : []).slice(0, 40);
+  const kwBlock = missing.length
+    ? `\nThe source resume is currently MISSING these job-description keywords. Incorporate as many as you legitimately can — through the Skills section or by reframing real experience with this terminology (do NOT fabricate employers/titles/dates/degrees):\n${missing.join(', ')}\n`
+    : '';
   return `Rewrite the SOURCE RESUME into a version tailored to the JOB DESCRIPTION, following all the rules. Return ONLY this JSON object describing the tailored resume:
 {
   "name": "candidate full name",
+  "title": "a concise professional headline / target role title, e.g. \\"Senior Full-Stack Engineer\\"",
   "contact": "single line: email | phone | location | links (only those present in the source)",
-  "summary": "2-4 sentence professional summary targeted at this job",
+  "summary": "2-3 sentence professional summary targeted at this job",
   "sections": [
-    { "heading": "SECTION TITLE (e.g. Skills)", "type": "bullets", "items": ["...", "..."] },
+    { "heading": "Skills", "type": "bullets", "items": ["grouped skill lines covering the role's key technologies"] },
     { "heading": "Experience", "type": "entries", "entries": [
-        { "title": "Job Title", "org": "Employer", "date": "date range", "bullets": ["achievement bullet", "..."] }
+        { "title": "Job Title", "org": "Employer", "date": "date range", "bullets": ["achievement bullet with **key keywords** in bold", "..."] }
     ] }
   ]
 }
-Use "bullets" for simple lists (Skills, Certifications). Use "entries" for Experience/Education/Projects. Keep the same section headings and ordering style as the source resume. Every fact must be traceable to the source resume.
-
+Requirements:
+- ALWAYS include "title" (the professional headline) — never leave it blank.
+- In every Experience bullet, wrap the most important skills/technologies/keywords in **double asterisks** so they render bold. Only bold genuine keywords, a few per bullet.
+- Keep it to ONE page: at most 3-4 tight bullets per role, a 2-3 sentence summary, and only the most relevant roles in full detail.
+- Use "bullets" for lists (Skills, Certifications) and "entries" for Experience/Education/Projects. Keep the same section headings/ordering as the source.
+${kwBlock}
 === JOB DESCRIPTION ===
 ${jd}
 
@@ -646,6 +656,16 @@ function sizeSet(style) {
   };
 }
 
+// Split "text with **bold** parts" into docx TextRuns.
+function boldRuns(text, opts) {
+  const parts = String(text).split(/(\*\*[^*]+\*\*)/g).filter((p) => p !== '');
+  if (parts.length === 0) return [new TextRun({ text: '', ...opts })];
+  return parts.map((p) => {
+    const m = p.match(/^\*\*([^*]+)\*\*$/);
+    return new TextRun({ text: m ? m[1] : p, bold: !!m, ...opts });
+  });
+}
+
 function buildResumeDocx(r, style) {
   const s = sizeSet(style);
   const font = style.fontFamily;
@@ -655,15 +675,24 @@ function buildResumeDocx(r, style) {
   children.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 40 },
+      spacing: { after: 20 },
       children: [new TextRun({ text: str(r.name) || 'Candidate', bold: true, size: s.name, font })],
     })
   );
+  if (str(r.title)) {
+    children.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 20 },
+        children: [new TextRun({ text: str(r.title), size: s.heading, color: '333333', font })],
+      })
+    );
+  }
   if (str(r.contact)) {
     children.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { after: 160 },
+        spacing: { after: 90 },
         children: [new TextRun({ text: str(r.contact), size: s.contact, color: '444444', font })],
       })
     );
@@ -671,7 +700,11 @@ function buildResumeDocx(r, style) {
   if (str(r.summary)) {
     children.push(sectionHeading('Summary', s, hStyle, font));
     children.push(
-      new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text: str(r.summary), size: s.body, font })] })
+      new Paragraph({
+        alignment: AlignmentType.JUSTIFIED,
+        spacing: { after: 90 },
+        children: boldRuns(str(r.summary), { size: s.body, font }),
+      })
     );
   }
 
@@ -686,7 +719,7 @@ function buildResumeDocx(r, style) {
         const date = str(e.date);
         children.push(
           new Paragraph({
-            spacing: { before: 80, after: 20 },
+            spacing: { before: 60, after: 10 },
             children: [
               new TextRun({ text: line, bold: true, size: s.body, font }),
               date
@@ -696,12 +729,26 @@ function buildResumeDocx(r, style) {
           })
         );
         for (const b of arr(e.bullets)) {
-          children.push(new Paragraph({ text: b, bullet: { level: 0 }, spacing: { after: 20 } }));
+          children.push(
+            new Paragraph({
+              bullet: { level: 0 },
+              alignment: AlignmentType.JUSTIFIED,
+              spacing: { after: 10 },
+              children: boldRuns(b, { size: s.body, font }),
+            })
+          );
         }
       }
     } else {
       for (const item of arr(section.items)) {
-        children.push(new Paragraph({ text: item, bullet: { level: 0 }, spacing: { after: 20 } }));
+        children.push(
+          new Paragraph({
+            bullet: { level: 0 },
+            alignment: AlignmentType.JUSTIFIED,
+            spacing: { after: 10 },
+            children: boldRuns(item, { size: s.body, font }),
+          })
+        );
       }
     }
   }
@@ -739,6 +786,11 @@ function esc(s) {
     .replace(/>/g, '&gt;');
 }
 
+// Escape HTML, then turn **bold** markers into <strong>.
+function escBold(text) {
+  return esc(text).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+}
+
 function buildResumeHtml(r, style) {
   const base = style.fontSizePt || 11;
   const font = style.fontFamily;
@@ -762,12 +814,12 @@ function buildResumeHtml(r, style) {
           .map((e) => {
             const line = [str(e.title), str(e.org)].filter(Boolean).join(' — ');
             const date = str(e.date) ? ` <span class="date">(${esc(e.date)})</span>` : '';
-            const bullets = arr(e.bullets).map((b) => `<li>${esc(b)}</li>`).join('');
+            const bullets = arr(e.bullets).map((b) => `<li>${escBold(b)}</li>`).join('');
             return `<div class="entry"><div class="etitle">${esc(line)}${date}</div><ul>${bullets}</ul></div>`;
           })
           .join('');
       } else {
-        body = `<ul>${arr(sec.items).map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`;
+        body = `<ul>${arr(sec.items).map((i) => `<li>${escBold(i)}</li>`).join('')}</ul>`;
       }
       return `<h2>${esc(sec.heading)}</h2>${body}`;
     })
@@ -775,20 +827,22 @@ function buildResumeHtml(r, style) {
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     * { box-sizing: border-box; }
-    body { font-family: '${esc(font)}', Calibri, Arial, sans-serif; font-size: ${base}pt; color: #111; margin: 0; line-height: 1.4; }
-    .name { text-align: center; font-size: ${base + 7}pt; font-weight: bold; margin: 0 0 2pt; }
-    .contact { text-align: center; font-size: ${base - 1}pt; color: #444; margin: 0 0 10pt; }
-    h2 { ${headCss}; margin: 12pt 0 4pt; }
-    p.summary { margin: 0 0 8pt; }
-    .entry { margin: 0 0 6pt; }
+    body { font-family: '${esc(font)}', Calibri, Arial, sans-serif; font-size: ${base}pt; color: #111; margin: 0; line-height: 1.3; }
+    .name { text-align: center; font-size: ${base + 7}pt; font-weight: bold; margin: 0 0 1pt; }
+    .title { text-align: center; font-size: ${base + 1}pt; color: #333; margin: 0 0 2pt; }
+    .contact { text-align: center; font-size: ${base - 1}pt; color: #444; margin: 0 0 7pt; }
+    h2 { ${headCss}; margin: 9pt 0 3pt; }
+    p.summary { margin: 0 0 6pt; text-align: justify; }
+    .entry { margin: 0 0 5pt; }
     .etitle { font-weight: bold; }
     .date { font-weight: normal; font-style: italic; color: #555; }
-    ul { margin: 2pt 0 6pt; padding-left: 18pt; }
-    li { margin: 0 0 2pt; }
+    ul { margin: 1pt 0 5pt; padding-left: 16pt; }
+    li { margin: 0 0 1.5pt; text-align: justify; }
   </style></head><body>
     <div class="name">${esc(r.name) || 'Candidate'}</div>
+    ${str(r.title) ? `<div class="title">${esc(r.title)}</div>` : ''}
     ${str(r.contact) ? `<div class="contact">${esc(r.contact)}</div>` : ''}
-    ${str(r.summary) ? `<h2>Summary</h2><p class="summary">${esc(r.summary)}</p>` : ''}
+    ${str(r.summary) ? `<h2>Summary</h2><p class="summary">${escBold(r.summary)}</p>` : ''}
     ${sectionsHtml}
   </body></html>`;
 }
@@ -824,7 +878,7 @@ function timestamp() {
 }
 
 async function generateResume(params) {
-  const { provider, apiKey, baseUrl, model, jobDescription, baseFilePath, outDir } = params;
+  const { provider, apiKey, baseUrl, model, jobDescription, baseFilePath, outDir, targetKeywords } = params;
   if (!apiKey || !model) throw new Error('Set your provider API key and model in Settings first.');
   if (!jobDescription || !jobDescription.trim()) throw new Error('Paste a job description first.');
   if (!baseFilePath) throw new Error('Choose a base resume to build from.');
@@ -839,7 +893,7 @@ async function generateResume(params) {
     baseUrl,
     model,
     system: GEN_SYSTEM_PROMPT,
-    user: buildGenPrompt(jobDescription, resumeText),
+    user: buildGenPrompt(jobDescription, resumeText, targetKeywords),
   });
   const parsed = extractJson(text);
   if (!parsed || !Array.isArray(parsed.sections)) {

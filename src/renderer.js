@@ -561,6 +561,7 @@ els.genResume.addEventListener('click', async () => {
   els.genResult.classList.add('hidden');
   els.genStatus.textContent = 'Generating tailored resume (.docx + .pdf)…';
   setStatus('Generating tailored resume…');
+  const base = lastResults.find((r) => r.filePath === ctx.baseFilePath);
   const res = await window.api.generateResume({
     provider: ctx.a.provider,
     apiKey: ctx.a.apiKey,
@@ -569,6 +570,7 @@ els.genResume.addEventListener('click', async () => {
     jobDescription: ctx.jobDescription,
     baseFilePath: ctx.baseFilePath,
     outDir: effectiveOutputDir(),
+    targetKeywords: base ? base.missing_keywords : [],
     ...activePrice(),
   });
   els.genResume.disabled = false;
