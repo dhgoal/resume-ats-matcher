@@ -185,6 +185,33 @@ async function fetchModels({ provider, apiKey, baseUrl }) {
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Fetch that retries transient failures (dropped connections, 429, 5xx) with backoff.
+// This machine's HTTPS occasionally resets, which surfaced as "fetch failed" on a
+// random resume; retrying makes a run resilient to those blips.
+async function fetchWithRetry(url, opts, attempts = 3) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, opts);
+      if ((res.status === 429 || res.status >= 500) && i < attempts - 1) {
+        await sleep(700 * (i + 1));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastErr = err; // transport-level failure ("fetch failed")
+      if (i < attempts - 1) {
+        await sleep(700 * (i + 1));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 // Returns the assistant's raw text content, regardless of provider.
 // maxTokens must be generous: reasoning models spend much of the budget "thinking"
 // before emitting the answer, so a low cap truncates the JSON (finish_reason=length).
@@ -192,7 +219,7 @@ async function chatComplete({ provider, apiKey, baseUrl, model, system, user, ma
   const base = trimTrailingSlash(baseUrl);
 
   if (provider === 'anthropic') {
-    const res = await fetch(`${base}/messages`, {
+    const res = await fetchWithRetry(`${base}/messages`, {
       method: 'POST',
       headers: {
         'x-api-key': apiKey,
@@ -230,7 +257,7 @@ async function chatComplete({ provider, apiKey, baseUrl, model, system, user, ma
   const call = (withJsonFormat) => {
     const body = { model, messages, temperature: 0.1, max_tokens: maxTokens };
     if (withJsonFormat) body.response_format = { type: 'json_object' };
-    return fetch(`${base}/chat/completions`, {
+    return fetchWithRetry(`${base}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
