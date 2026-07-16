@@ -11,7 +11,8 @@ const KEY_HINTS = {
 
 const els = {
   toggleSettings: $('toggleSettings'),
-  settingsPanel: $('settingsPanel'),
+  settingsOverlay: $('settingsOverlay'),
+  closeSettings: $('closeSettings'),
   provider: $('provider'),
   providerKeyHint: $('providerKeyHint'),
   apiKey: $('apiKey'),
@@ -32,7 +33,6 @@ const els = {
   resultsSection: $('resultsSection'),
   resultsSummary: $('resultsSummary'),
   results: $('results'),
-  toolsSection: $('toolsSection'),
   baseResume: $('baseResume'),
   genResume: $('genResume'),
   genStatus: $('genStatus'),
@@ -48,7 +48,14 @@ const els = {
   answerPinned: $('answerPinned'),
   savedQuestions: $('savedQuestions'),
   savedCount: $('savedCount'),
+  contextBar: $('contextBar'),
+  tailorEmpty: $('tailorEmpty'),
+  tailorBody: $('tailorBody'),
+  questionsEmpty: $('questionsEmpty'),
+  questionsBody: $('questionsBody'),
 };
+
+let hasResults = false;
 
 // Full settings object, kept in sync with the UI.
 let state = null;
@@ -68,7 +75,7 @@ async function init() {
   if (state.directory) refreshCount(state.directory);
 
   const active = state.providers[state.provider];
-  if (!active.apiKey) els.settingsPanel.classList.remove('hidden');
+  if (!active.apiKey) openSettings();
 }
 
 function loadProviderFields() {
@@ -125,9 +132,39 @@ async function persist() {
 // --------------------------------------------------------------------------
 // Settings interactions
 // --------------------------------------------------------------------------
+function openSettings() {
+  els.settingsOverlay.classList.remove('hidden');
+}
+function closeSettings() {
+  els.settingsOverlay.classList.add('hidden');
+}
 els.toggleSettings.addEventListener('click', () => {
-  els.settingsPanel.classList.toggle('hidden');
+  els.settingsOverlay.classList.contains('hidden') ? openSettings() : closeSettings();
 });
+els.closeSettings.addEventListener('click', closeSettings);
+els.settingsOverlay.addEventListener('click', (e) => {
+  if (e.target === els.settingsOverlay) closeSettings(); // click backdrop to dismiss
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !els.settingsOverlay.classList.contains('hidden')) closeSettings();
+});
+
+// --------------------------------------------------------------------------
+// Tabs
+// --------------------------------------------------------------------------
+function activateTab(name) {
+  for (const btn of document.querySelectorAll('.tab')) {
+    btn.classList.toggle('active', btn.dataset.tab === name);
+  }
+  for (const panel of document.querySelectorAll('.tab-panel')) {
+    panel.classList.toggle('active', panel.id === 'tab-' + name);
+  }
+  // The shared base-resume bar only applies to the tailor/questions tabs.
+  els.contextBar.classList.toggle('hidden', name === 'analyze' || !hasResults);
+}
+for (const btn of document.querySelectorAll('.tab')) {
+  btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+}
 
 els.provider.addEventListener('change', () => {
   syncProviderFields(); // keep edits to the previous provider
@@ -216,7 +253,7 @@ async function runAnalysis() {
   if (!jobDescription) problems.push('job description');
   if (problems.length) {
     setProgress(0, `Missing: ${problems.join(', ')}.`);
-    if (!a.apiKey || !a.model) els.settingsPanel.classList.remove('hidden');
+    if (!a.apiKey || !a.model) openSettings();
     return;
   }
 
@@ -224,7 +261,7 @@ async function runAnalysis() {
   els.analyze.disabled = true;
   els.results.innerHTML = '';
   els.resultsSection.classList.add('hidden');
-  els.toolsSection.classList.add('hidden');
+  document.body.classList.remove('has-results');
   setProgress(2, 'Reading resumes…');
 
   const unsubscribe = window.api.onProgress((p) => {
@@ -309,8 +346,14 @@ function renderResults(results) {
 // Tools panel (tailored resume + Q&A)
 // --------------------------------------------------------------------------
 function populateTools(ok) {
-  if (ok.length === 0) {
-    els.toolsSection.classList.add('hidden');
+  hasResults = ok.length > 0;
+  document.body.classList.toggle('has-results', hasResults);
+  if (!hasResults) {
+    els.contextBar.classList.add('hidden');
+    els.tailorBody.classList.add('hidden');
+    els.questionsBody.classList.add('hidden');
+    els.tailorEmpty.classList.remove('hidden');
+    els.questionsEmpty.classList.remove('hidden');
     return;
   }
   els.baseResume.innerHTML = '';
@@ -332,7 +375,14 @@ function populateTools(ok) {
     top < 75
       ? `Top match scored only ${top}. Generating a tailored resume from your base resume is recommended.`
       : '';
-  els.toolsSection.classList.remove('hidden');
+
+  // Reveal the tailor/questions tab bodies and the shared base-resume bar.
+  els.tailorEmpty.classList.add('hidden');
+  els.questionsEmpty.classList.add('hidden');
+  els.tailorBody.classList.remove('hidden');
+  els.questionsBody.classList.remove('hidden');
+  const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+  els.contextBar.classList.toggle('hidden', activeTab === 'analyze');
   refreshSavedQuestions();
 }
 
@@ -364,7 +414,7 @@ async function ensureReady() {
   const jobDescription = els.jobDescription.value.trim();
   const baseFilePath = els.baseResume.value;
   if (!a.apiKey || !a.model) {
-    els.settingsPanel.classList.remove('hidden');
+    openSettings();
     throw new Error(`Set your ${PROVIDER_LABELS[a.provider]} API key and model in Settings.`);
   }
   return { a, jobDescription, baseFilePath };
