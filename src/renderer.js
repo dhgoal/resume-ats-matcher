@@ -74,6 +74,24 @@ const els = {
 
 let hasResults = false;
 
+// --------------------------------------------------------------------------
+// Theme (light default, dark optional) — persisted in localStorage
+// --------------------------------------------------------------------------
+function applyTheme(theme) {
+  if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+  const btn = $('toggleTheme');
+  btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+  btn.title = theme === 'dark' ? 'Switch to light' : 'Switch to dark';
+}
+let currentTheme = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
+applyTheme(currentTheme);
+$('toggleTheme').addEventListener('click', () => {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('theme', currentTheme);
+  applyTheme(currentTheme);
+});
+
 // Full settings object, kept in sync with the UI.
 let state = null;
 let analyzing = false;
@@ -433,15 +451,11 @@ function setProgress(pct, text) {
 // --------------------------------------------------------------------------
 // Rendering
 // --------------------------------------------------------------------------
-function scoreColor(score) {
-  if (score >= 75) return { bg: 'rgba(18,161,80,0.12)', ring: '#12a150', text: '#0f7a3d' };
-  if (score >= 50) return { bg: 'rgba(194,135,10,0.14)', ring: '#d99a1c', text: '#8a6100' };
-  return { bg: 'rgba(214,69,69,0.12)', ring: '#d64545', text: '#b23b3b' };
-}
-function barColor(score) {
-  if (score >= 75) return '#12a150';
-  if (score >= 50) return '#d99a1c';
-  return '#d64545';
+// Theme-aware via CSS classes (see .score.good/.mid/.bad and .cat-fill.*)
+function scoreClass(score) {
+  if (score >= 75) return 'good';
+  if (score >= 50) return 'mid';
+  return 'bad';
 }
 
 function renderError(message) {
@@ -675,12 +689,11 @@ function renderCheckAts(container, filePath, jobDescription) {
 }
 
 function renderAtsScore(container, r) {
-  const c = scoreColor(r.ats_score);
   const matched = (r.matched_keywords || []).slice(0, 30);
   const missing = (r.missing_keywords || []).slice(0, 30);
   container.innerHTML = `
     <div class="ats-head">
-      <div class="score" style="background:${c.bg};box-shadow:inset 0 0 0 3px ${c.ring};color:${c.text}"><span>${r.ats_score}</span></div>
+      <div class="score ${scoreClass(r.ats_score)}"><span>${r.ats_score}</span></div>
       <div class="ats-verdict">${escapeHtml(r.verdict || '')}</div>
     </div>
     ${renderBreakdown(r.categories)}
@@ -948,7 +961,7 @@ function renderBreakdown(categories) {
       return `
         <div class="cat-row">
           <div class="cat-label">${escapeHtml(c.label)} <span class="cat-weight">${c.weight}%</span></div>
-          <div class="cat-bar"><div class="cat-fill" style="width:${c.score}%;background:${barColor(c.score)}"></div></div>
+          <div class="cat-bar"><div class="cat-fill ${scoreClass(c.score)}" style="width:${c.score}%"></div></div>
           <div class="cat-score">${c.score}</div>
         </div>`;
     })
@@ -974,7 +987,6 @@ function renderCard(r, rank) {
   }
 
   if (rank === 1) card.classList.add('best');
-  const c = scoreColor(r.ats_score);
   const isBest = rank === 1;
   const matched = (r.matched_keywords || []).slice(0, 30);
   const missing = (r.missing_keywords || []).slice(0, 30);
@@ -989,7 +1001,7 @@ function renderCard(r, rank) {
         <div class="result-file">${escapeHtml(r.file)}</div>
         <div class="verdict">${escapeHtml(r.verdict || '')}</div>
       </div>
-      <div class="score" style="background:${c.bg};box-shadow:inset 0 0 0 3px ${c.ring};color:${c.text}">
+      <div class="score ${scoreClass(r.ats_score)}">
         <span>${r.ats_score}</span>
       </div>
       <div class="expand-caret">▸</div>
