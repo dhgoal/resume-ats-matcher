@@ -874,14 +874,21 @@ async function measureContentHeightIn(html, contentWidthIn) {
 }
 
 // Find the largest scale (<=1) that fits the content on one page.
+// Wrapped-text height scales ~quadratically with font size, so we use sqrt and
+// iterate/re-measure instead of a single linear guess (which over-shrank badly).
 async function fitScale(parsed, style) {
   const contentWidthIn = 8.5 - (style.margins.left + style.margins.right) / 1440;
   const contentHeightIn = 11 - (style.margins.top + style.margins.bottom) / 1440;
-  const neededIn = await measureContentHeightIn(buildResumeHtml(parsed, style, 1), contentWidthIn);
-  if (neededIn <= contentHeightIn) return 1;
-  // shrinking font reduces height a bit faster than linearly; clamp to a readable floor
-  const scale = (contentHeightIn / neededIn) * 0.98;
-  return Math.max(0.62, Math.min(1, scale));
+  const FLOOR = 0.8; // never shrink below 80% — keep it readable
+  let scale = 1;
+  for (let i = 0; i < 4; i++) {
+    const needed = await measureContentHeightIn(buildResumeHtml(parsed, style, scale), contentWidthIn);
+    if (needed <= contentHeightIn * 1.015) return scale; // fits (small tolerance)
+    const next = scale * Math.sqrt(contentHeightIn / needed);
+    scale = Math.max(FLOOR, Math.min(1, next));
+    if (scale === FLOOR) return FLOOR;
+  }
+  return scale;
 }
 
 async function htmlToPdf(html, margins, outPath) {

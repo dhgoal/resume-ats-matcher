@@ -1,17 +1,17 @@
 :root {
-  --bg: #0f1420;
-  --panel: #171e2e;
-  --panel-2: #1e2740;
-  --border: #2a3552;
-  --text: #e8edf7;
-  --muted: #93a0bd;
-  --accent: #4f8cff;
-  --accent-2: #6ee7b7;
-  --danger: #ff6b6b;
-  --good: #35d07f;
-  --mid: #f4c04d;
-  --bad: #ff7a7a;
-  --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  --bg: #eef2f8;
+  --panel: #ffffff;
+  --panel-2: #f3f6fb;
+  --border: #dde3ee;
+  --text: #1b2436;
+  --muted: #64748b;
+  --accent: #2f6fed;
+  --accent-2: #0ca678;
+  --danger: #d64545;
+  --good: #12a150;
+  --mid: #c2870a;
+  --bad: #d64545;
+  --shadow: 0 6px 22px rgba(30, 45, 80, 0.08);
 }
 
 * { box-sizing: border-box; }
@@ -19,7 +19,7 @@
 body {
   margin: 0;
   font-family: "Segoe UI", Roboto, system-ui, sans-serif;
-  background: radial-gradient(1200px 600px at 20% -10%, #1a2440 0%, var(--bg) 55%);
+  background: radial-gradient(1200px 600px at 20% -10%, #e6eeff 0%, var(--bg) 55%);
   color: var(--text);
   font-size: 14px;
   min-height: 100vh;
@@ -37,7 +37,7 @@ body {
   justify-content: space-between;
   padding: 16px 24px;
   border-bottom: 1px solid var(--border);
-  background: rgba(15, 20, 32, 0.7);
+  background: rgba(255, 255, 255, 0.82);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -45,7 +45,7 @@ body {
 }
 .brand { display: flex; align-items: center; gap: 14px; }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
-.logo { font-size: 30px; }
+.logo { display: inline-flex; align-items: center; }
 .topbar h1 { margin: 0; font-size: 19px; font-weight: 650; }
 .subtitle { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
 
@@ -53,7 +53,7 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(6, 10, 18, 0.68);
+  background: rgba(20, 30, 50, 0.35);
   backdrop-filter: blur(3px);
   display: flex;
   align-items: flex-start;
@@ -65,7 +65,7 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 20px 60px rgba(20, 35, 70, 0.22);
   width: 100%;
   max-width: 720px;
   max-height: 82vh;
@@ -277,7 +277,7 @@ input[readonly] { color: var(--muted); cursor: default; }
   background: var(--panel-2);
   transition: border-color 0.15s;
 }
-.result-card.best { border-color: var(--good); box-shadow: 0 0 0 2px rgba(53, 208, 127, 0.25); }
+.result-card.best { border-color: var(--good); box-shadow: 0 0 0 2px rgba(18, 161, 80, 0.22); }
 .result-card.failed { opacity: 0.75; }
 
 .result-top { display: flex; align-items: center; gap: 14px; cursor: pointer; }
@@ -320,8 +320,8 @@ input[readonly] { color: var(--muted); cursor: default; }
   font-size: 12px; padding: 4px 10px; border-radius: 999px;
   border: 1px solid var(--border);
 }
-.chip.match { background: rgba(53, 208, 127, 0.12); border-color: rgba(53, 208, 127, 0.4); color: #9df0c3; }
-.chip.miss { background: rgba(255, 122, 122, 0.1); border-color: rgba(255, 122, 122, 0.4); color: #ffb3b3; }
+.chip.match { background: rgba(18, 161, 80, 0.1); border-color: rgba(18, 161, 80, 0.4); color: #0f7a3d; }
+.chip.miss { background: rgba(214, 69, 69, 0.09); border-color: rgba(214, 69, 69, 0.4); color: #b23b3b; }
 .detail-text { font-size: 13px; line-height: 1.5; color: var(--text); }
 .error-text { color: var(--bad); font-size: 12.5px; }
 
@@ -355,7 +355,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   gap: 16px;
   padding: 7px 20px;
   font-size: 12.5px;
-  background: rgba(15, 20, 32, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   border-top: 1px solid var(--border);
   backdrop-filter: blur(8px);
 }
@@ -461,7 +461,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   cursor: pointer;
   transition: all 0.12s;
 }
-.ms-chip.selected { background: rgba(53, 208, 127, 0.15); border-color: rgba(53, 208, 127, 0.5); color: #9df0c3; }
+.ms-chip.selected { background: rgba(18, 161, 80, 0.12); border-color: rgba(18, 161, 80, 0.5); color: #0f7a3d; }
 .ms-chip:hover { border-color: var(--accent); }
 
 .checkats { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }

@@ -434,14 +434,14 @@ function setProgress(pct, text) {
 // Rendering
 // --------------------------------------------------------------------------
 function scoreColor(score) {
-  if (score >= 75) return { bg: 'rgba(53,208,127,0.18)', ring: '#35d07f', text: '#9df0c3' };
-  if (score >= 50) return { bg: 'rgba(244,192,77,0.18)', ring: '#f4c04d', text: '#f7d488' };
-  return { bg: 'rgba(255,122,122,0.16)', ring: '#ff7a7a', text: '#ffb3b3' };
+  if (score >= 75) return { bg: 'rgba(18,161,80,0.12)', ring: '#12a150', text: '#0f7a3d' };
+  if (score >= 50) return { bg: 'rgba(194,135,10,0.14)', ring: '#d99a1c', text: '#8a6100' };
+  return { bg: 'rgba(214,69,69,0.12)', ring: '#d64545', text: '#b23b3b' };
 }
 function barColor(score) {
-  if (score >= 75) return '#35d07f';
-  if (score >= 50) return '#f4c04d';
-  return '#ff7a7a';
+  if (score >= 75) return '#12a150';
+  if (score >= 50) return '#d99a1c';
+  return '#d64545';
 }
 
 function renderError(message) {
