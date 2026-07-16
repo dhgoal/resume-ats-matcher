@@ -15,7 +15,10 @@
           <p class="subtitle">Rank DOCX resumes against a job description · powered by Chutes, OpenAI &amp; Anthropic</p>
         </div>
       </div>
-      <button id="toggleSettings" class="btn ghost">⚙️ Settings</button>
+      <div class="topbar-actions">
+        <button id="toggleUsage" class="btn ghost">📊 Usage</button>
+        <button id="toggleSettings" class="btn ghost">⚙️ Settings</button>
+      </div>
     </header>
 
     <!-- Settings modal -->
@@ -68,12 +71,29 @@
       </div>
     </div>
 
+    <!-- Usage modal -->
+    <div id="usageOverlay" class="modal-overlay hidden">
+      <div class="modal modal-wide" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <h2>Token usage &amp; cost</h2>
+          <button id="closeUsage" class="modal-close" title="Close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="usage-head">
+            <div id="usageTotals" class="usage-totals"></div>
+            <button id="clearUsage" class="btn small">Clear history</button>
+          </div>
+          <p class="hint">Exact token counts from each API response. Cost is computed from the model's per-million-token price (shown where the provider reports pricing — e.g. Chutes).</p>
+          <div id="usageTable" class="usage-table-wrap"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Tabs -->
     <nav class="tabs">
       <button class="tab active" data-tab="analyze">1 · Analyze</button>
       <button class="tab" data-tab="tailor">2 · Resume &amp; Cover</button>
       <button class="tab" data-tab="questions">3 · Questions</button>
-      <button class="tab" data-tab="usage">4 · Usage</button>
     </nav>
 
     <!-- Shared base-resume bar (tabs 2 & 3) -->
@@ -174,19 +194,12 @@
         </div>
       </section>
 
-      <!-- Tab: Usage -->
-      <section id="tab-usage" class="tab-panel">
-        <div class="panel">
-          <div class="results-head">
-            <h2>Token usage &amp; cost</h2>
-            <button id="clearUsage" class="btn small">Clear history</button>
-          </div>
-          <p class="hint">Exact token counts from each API response. Cost is computed from the model's per-million-token price (shown where the provider reports pricing — e.g. Chutes).</p>
-          <div id="usageTotals" class="usage-totals"></div>
-          <div id="usageTable" class="usage-table-wrap"></div>
-        </div>
-      </section>
     </main>
+
+    <footer id="statusbar" class="statusbar">
+      <span id="statusbarMsg" class="sb-msg">Ready</span>
+      <span id="statusbarUsage" class="sb-usage"></span>
+    </footer>
 
     <script src="renderer.js"></script>
   </body>

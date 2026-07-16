@@ -44,6 +44,7 @@ body {
   backdrop-filter: blur(8px);
 }
 .brand { display: flex; align-items: center; gap: 14px; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
 .logo { font-size: 30px; }
 .topbar h1 { margin: 0; font-size: 19px; font-weight: 650; }
 .subtitle { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
@@ -67,9 +68,15 @@ body {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
   width: 100%;
   max-width: 720px;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   animation: modalIn 0.14s ease-out;
 }
+.modal-wide { max-width: 880px; }
+.modal .modal-body { overflow-y: auto; }
+.usage-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 @keyframes modalIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 .modal-head {
   display: flex;
@@ -337,8 +344,26 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 
 .empty { color: var(--muted); text-align: center; padding: 20px; }
 
+/* Bottom status bar */
+.statusbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 20px;
+  font-size: 12.5px;
+  background: rgba(15, 20, 32, 0.92);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+.sb-msg { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-usage { color: var(--accent-2); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+
 /* Usage */
-.usage-totals { font-size: 14px; color: var(--text); margin: 4px 0 14px; }
+.usage-totals { font-size: 14px; color: var(--text); }
 .usage-totals strong { color: var(--accent-2); }
 .usage-table-wrap { overflow-x: auto; }
 .usage-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }

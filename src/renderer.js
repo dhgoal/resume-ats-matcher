@@ -13,6 +13,11 @@ const els = {
   toggleSettings: $('toggleSettings'),
   settingsOverlay: $('settingsOverlay'),
   closeSettings: $('closeSettings'),
+  toggleUsage: $('toggleUsage'),
+  usageOverlay: $('usageOverlay'),
+  closeUsage: $('closeUsage'),
+  statusbarMsg: $('statusbarMsg'),
+  statusbarUsage: $('statusbarUsage'),
   provider: $('provider'),
   providerKeyHint: $('providerKeyHint'),
   apiKey: $('apiKey'),
@@ -197,6 +202,13 @@ function openSettings() {
 function closeSettings() {
   els.settingsOverlay.classList.add('hidden');
 }
+function openUsage() {
+  refreshUsage();
+  els.usageOverlay.classList.remove('hidden');
+}
+function closeUsage() {
+  els.usageOverlay.classList.add('hidden');
+}
 els.toggleSettings.addEventListener('click', () => {
   els.settingsOverlay.classList.contains('hidden') ? openSettings() : closeSettings();
 });
@@ -204,9 +216,23 @@ els.closeSettings.addEventListener('click', closeSettings);
 els.settingsOverlay.addEventListener('click', (e) => {
   if (e.target === els.settingsOverlay) closeSettings(); // click backdrop to dismiss
 });
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !els.settingsOverlay.classList.contains('hidden')) closeSettings();
+els.toggleUsage.addEventListener('click', () => {
+  els.usageOverlay.classList.contains('hidden') ? openUsage() : closeUsage();
 });
+els.closeUsage.addEventListener('click', closeUsage);
+els.usageOverlay.addEventListener('click', (e) => {
+  if (e.target === els.usageOverlay) closeUsage();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!els.settingsOverlay.classList.contains('hidden')) closeSettings();
+  if (!els.usageOverlay.classList.contains('hidden')) closeUsage();
+});
+
+// Bottom status bar
+function setStatus(msg) {
+  if (msg) els.statusbarMsg.textContent = msg;
+}
 
 // --------------------------------------------------------------------------
 // Tabs
@@ -220,7 +246,6 @@ function activateTab(name) {
   }
   // The shared base-resume bar only applies to the tailor/questions tabs.
   els.contextBar.classList.toggle('hidden', !(hasResults && (name === 'tailor' || name === 'questions')));
-  if (name === 'usage') refreshUsage();
 }
 for (const btn of document.querySelectorAll('.tab')) {
   btn.addEventListener('click', () => activateTab(btn.dataset.tab));
@@ -371,6 +396,7 @@ async function runAnalysis() {
 function setProgress(pct, text) {
   els.progressFill.style.width = `${pct}%`;
   els.progressText.textContent = text || '';
+  setStatus(text);
 }
 
 // --------------------------------------------------------------------------
@@ -507,6 +533,7 @@ els.genResume.addEventListener('click', async () => {
   els.genResume.disabled = true;
   els.genResult.classList.add('hidden');
   els.genStatus.textContent = 'Generating tailored resume (.docx + .pdf)…';
+  setStatus('Generating tailored resume…');
   const res = await window.api.generateResume({
     provider: ctx.a.provider,
     apiKey: ctx.a.apiKey,
@@ -523,6 +550,7 @@ els.genResume.addEventListener('click', async () => {
     return;
   }
   els.genStatus.textContent = `✓ Saved in your resumes folder${res.usage ? ' · used ' + fmtUsage(res.usage) : ''}:`;
+  setStatus(`Tailored resume saved${res.usage ? ' · used ' + fmtUsage(res.usage) : ''}`);
   renderFileLinks(els.genResult, [
     { label: 'DOCX', path: res.docxPath },
     { label: 'PDF', path: res.pdfPath },
@@ -547,6 +575,7 @@ els.genCover.addEventListener('click', async () => {
   els.genCover.disabled = true;
   els.coverResult.classList.add('hidden');
   els.coverStatus.textContent = 'Writing cover letter…';
+  setStatus('Writing cover letter…');
   const res = await window.api.generateCoverLetter({
     provider: ctx.a.provider,
     apiKey: ctx.a.apiKey,
@@ -564,6 +593,7 @@ els.genCover.addEventListener('click', async () => {
   }
   lastCoverLetter = res.letter;
   els.coverStatus.textContent = `Preview below${res.usage ? ' · used ' + fmtUsage(res.usage) : ''}. Regenerate for a different draft, or save when ready.`;
+  setStatus(`Cover letter drafted${res.usage ? ' · used ' + fmtUsage(res.usage) : ''}`);
   renderCoverPreview(res.text);
   refreshUsage();
 });
@@ -630,6 +660,7 @@ async function answerAndShow(questions, statusEl) {
     return;
   }
   statusEl.textContent = res.usage ? `Used ${fmtUsage(res.usage)}` : '';
+  setStatus(`Answered ${res.answers.length} question${res.answers.length === 1 ? '' : 's'}${res.usage ? ' · used ' + fmtUsage(res.usage) : ''}`);
   renderAnswers(res.answers);
   if (res.questions) renderSavedQuestions(res.questions); // freshly updated frequencies
   refreshUsage();
@@ -701,6 +732,11 @@ function renderUsage(list) {
   els.usageTotals.innerHTML = list.length
     ? `<strong>${list.length}</strong> runs · <strong>${fmtTokens(totalTokens)}</strong> tokens · <strong>${anyCost ? fmtCost(totalCost) : '—'}</strong> total`
     : 'No usage recorded yet.';
+
+  // Mirror the running total into the bottom status bar.
+  els.statusbarUsage.textContent = list.length
+    ? `Total: ${fmtTokens(totalTokens)} tokens · ${anyCost ? fmtCost(totalCost) : '—'}`
+    : '';
 
   if (list.length === 0) {
     els.usageTable.innerHTML = '';
