@@ -65,8 +65,6 @@ const els = {
   msCount: $('msCount'),
   msAll: $('msAll'),
   msNone: $('msNone'),
-  questionsEmpty: $('questionsEmpty'),
-  questionsBody: $('questionsBody'),
   usageTotals: $('usageTotals'),
   usageTable: $('usageTable'),
   clearUsage: $('clearUsage'),
@@ -109,6 +107,7 @@ async function init() {
   updateEnginePill();
   if (state.directory) refreshCount(state.directory);
   refreshUsage();
+  refreshSavedQuestions(); // show the saved question bank right away (persists across launches)
 
   const active = state.providers[state.provider];
   if (!active.apiKey) {
@@ -494,9 +493,7 @@ function populateTools(ok) {
   if (!hasResults) {
     els.contextBar.classList.add('hidden');
     els.tailorBody.classList.add('hidden');
-    els.questionsBody.classList.add('hidden');
     els.tailorEmpty.classList.remove('hidden');
-    els.questionsEmpty.classList.remove('hidden');
     return;
   }
   els.baseResume.innerHTML = '';
@@ -520,11 +517,9 @@ function populateTools(ok) {
       ? `Top match scored only ${top}. Generating a tailored resume from your base resume is recommended.`
       : '';
 
-  // Reveal the tailor/questions tab bodies and the shared base-resume bar.
+  // Reveal the tailor tab body and the shared base-resume bar.
   els.tailorEmpty.classList.add('hidden');
-  els.questionsEmpty.classList.add('hidden');
   els.tailorBody.classList.remove('hidden');
-  els.questionsBody.classList.remove('hidden');
   updateOutputDirField();
   const activeTab = document.querySelector('.tab.active')?.dataset.tab;
   els.contextBar.classList.toggle('hidden', activeTab === 'analyze');
@@ -787,6 +782,9 @@ function renderCoverPreview(text) {
 }
 
 async function answerAndShow(questions, statusEl) {
+  if (!els.baseResume.value) {
+    throw new Error('Run an analysis on the Analyze tab first, then pick a base resume — answers are grounded in it.');
+  }
   const ctx = await ensureReady();
   statusEl.textContent = `Answering ${questions.length} question${questions.length === 1 ? '' : 's'}…`;
   const res = await window.api.answerQuestions({

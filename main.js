@@ -122,6 +122,9 @@ function createWindow() {
 
 app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('com.jct.resumeatsmatcher'); // taskbar icon grouping
+  // Use one fixed data folder so dev (`npm start`) and the packaged .exe share
+  // the same settings / saved questions / usage instead of separate folders.
+  app.setPath('userData', path.join(app.getPath('appData'), 'resume-ats-matcher'));
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
