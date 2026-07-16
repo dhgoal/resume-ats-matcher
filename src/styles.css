@@ -267,6 +267,9 @@ select { appearance: none; cursor: pointer; }
   flex: 0 0 auto;
 }
 .gen-result .file-line { margin-bottom: 8px; }
+.cover-actions { display: flex; gap: 8px; align-items: center; }
+.cover-files { margin-top: 10px; }
+.cover-files .file-line { margin-bottom: 6px; }
 
 /* Saved questions */
 .saved-head { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; gap: 12px; }

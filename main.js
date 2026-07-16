@@ -213,12 +213,12 @@ async function chatComplete({ provider, apiKey, baseUrl, model, system, user }) 
 // Industry-style ATS rubric (weighted category scoring)
 // ---------------------------------------------------------------------------
 const RUBRIC = [
-  { key: 'hard_skills', label: 'Hard skills & keywords', weight: 35, hasKeywords: true },
+  { key: 'hard_skills', label: 'Hard skills & keywords', weight: 45, hasKeywords: true },
   { key: 'experience', label: 'Experience & depth', weight: 20, hasKeywords: false },
-  { key: 'job_title', label: 'Job title & role relevance', weight: 15, hasKeywords: false },
-  { key: 'education', label: 'Education & certifications', weight: 10, hasKeywords: false },
-  { key: 'soft_skills', label: 'Soft skills & competencies', weight: 10, hasKeywords: true },
-  { key: 'formatting', label: 'ATS formatting & parseability', weight: 10, hasKeywords: false },
+  { key: 'job_title', label: 'Job title & role relevance', weight: 13, hasKeywords: false },
+  { key: 'education', label: 'Education & certifications', weight: 8, hasKeywords: false },
+  { key: 'soft_skills', label: 'Soft skills & competencies', weight: 7, hasKeywords: true },
+  { key: 'formatting', label: 'ATS formatting & parseability', weight: 7, hasKeywords: false },
 ];
 
 const SYSTEM_PROMPT =
@@ -879,16 +879,28 @@ async function generateCoverLetter(params) {
     throw new Error('The model did not return a usable cover letter. Try again.');
   }
 
+  // Return the letter for preview; files are written only on demand via saveCoverLetter.
+  return { letter: parsed, text: coverLetterText(parsed) };
+}
+
+async function saveCoverLetter(params) {
+  const { letter, baseFilePath, outDir } = params;
+  if (!letter || !Array.isArray(letter.paragraphs)) {
+    throw new Error('No cover letter to save — generate one first.');
+  }
+  if (!baseFilePath) throw new Error('Missing base resume for styling.');
+
+  const style = await extractDocxStyle(baseFilePath);
   const dir = outDir || path.dirname(baseFilePath);
-  const baseName = `Cover Letter - ${sanitizeFilename(parsed.name)} - ${timestamp()}`;
+  const baseName = `Cover Letter - ${sanitizeFilename(letter.name)} - ${timestamp()}`;
 
   const docxPath = path.join(dir, baseName + '.docx');
-  await fsp.writeFile(docxPath, await Packer.toBuffer(buildLetterDocx(parsed, style)));
+  await fsp.writeFile(docxPath, await Packer.toBuffer(buildLetterDocx(letter, style)));
 
   const pdfPath = path.join(dir, baseName + '.pdf');
-  await htmlToPdf(buildLetterHtml(parsed, style), style.margins, pdfPath);
+  await htmlToPdf(buildLetterHtml(letter, style), style.margins, pdfPath);
 
-  return { docxPath, pdfPath, text: coverLetterText(parsed) };
+  return { docxPath, pdfPath };
 }
 
 // ---------------------------------------------------------------------------
@@ -1010,6 +1022,14 @@ ipcMain.handle('resume:generate', async (_e, params) => {
 ipcMain.handle('cover:generate', async (_e, params) => {
   try {
     return { ok: true, ...(await generateCoverLetter(params)) };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('cover:save', async (_e, params) => {
+  try {
+    return { ok: true, ...(await saveCoverLetter(params)) };
   } catch (err) {
     return { ok: false, error: err.message };
   }

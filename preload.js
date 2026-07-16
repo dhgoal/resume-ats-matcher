@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   analyze: (params) => ipcRenderer.invoke('analyze:run', params),
   generateResume: (params) => ipcRenderer.invoke('resume:generate', params),
   generateCoverLetter: (params) => ipcRenderer.invoke('cover:generate', params),
+  saveCoverLetter: (params) => ipcRenderer.invoke('cover:save', params),
   answerQuestions: (params) => ipcRenderer.invoke('qa:answer', params),
   listQuestions: () => ipcRenderer.invoke('questions:list'),
   pinQuestion: (id, pinned) => ipcRenderer.invoke('questions:pin', { id, pinned }),

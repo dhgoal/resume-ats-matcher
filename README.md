@@ -8,12 +8,12 @@ The overall score is a weighted blend of six categories (each rated 0–100 by t
 
 | Category | Weight | What it measures |
 |---|---|---|
-| Hard skills & keywords | 35% | Required technical skills, tools, and JD keywords present |
+| Hard skills & keywords | 45% | Required technical skills, tools, and JD keywords present |
 | Experience & depth | 20% | Required years + relevant depth/impact/seniority |
-| Job title & role relevance | 15% | Title/scope alignment with the target role |
-| Education & certifications | 10% | Required degrees, fields, licenses, certs |
-| Soft skills & competencies | 10% | Leadership, communication, collaboration, etc. |
-| ATS formatting & parseability | 10% | Standard sections, clean dates, no image/table reliance |
+| Job title & role relevance | 13% | Title/scope alignment with the target role |
+| Education & certifications | 8% | Required degrees, fields, licenses, certs |
+| Soft skills & competencies | 7% | Leadership, communication, collaboration, etc. |
+| ATS formatting & parseability | 7% | Standard sections, clean dates, no image/table reliance |
 
 ## Providers
 
@@ -51,6 +51,7 @@ npm start
 A **Tailor & apply** panel appears under the results, working from a **Base resume** you pick (defaults to the top match):
 
 - **✨ Generate a tailored resume** — rewrites your base resume to match the job description (keyword emphasis, targeted summary) in the same section style, and saves a new `.docx` in your resumes folder. If the top match scored under 75 it's recommended automatically. **It never invents experience** — only reorganizes, rephrases, and emphasizes what's already in your source resume. Buttons let you **Open** the file or **Show in folder**.
+- **📝 Generate a cover letter** — writes a tailored letter from your base resume + JD (optional company/role hint). It **previews the text first** (with a Copy button); press **💾 Save .docx + .pdf** only when you're happy, and it saves both in your resumes folder. Regenerate as many drafts as you like before saving.
 - **💬 Answer application questions** — paste screening questions (one per line); it generates honest, first-person answers grounded in your resume + the JD, each with a **Copy** button.
 
 ## Notes

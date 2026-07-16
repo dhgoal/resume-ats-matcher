@@ -406,6 +406,8 @@ els.genResume.addEventListener('click', async () => {
   ]);
 });
 
+let lastCoverLetter = null; // structured letter from the latest generation, for on-demand saving
+
 els.genCover.addEventListener('click', async () => {
   let ctx;
   try {
@@ -420,7 +422,7 @@ els.genCover.addEventListener('click', async () => {
   }
   els.genCover.disabled = true;
   els.coverResult.classList.add('hidden');
-  els.coverStatus.textContent = 'Writing cover letter (.docx + .pdf)…';
+  els.coverStatus.textContent = 'Writing cover letter…';
   const res = await window.api.generateCoverLetter({
     provider: ctx.a.provider,
     apiKey: ctx.a.apiKey,
@@ -428,7 +430,6 @@ els.genCover.addEventListener('click', async () => {
     model: ctx.a.model,
     jobDescription: ctx.jobDescription,
     baseFilePath: ctx.baseFilePath,
-    outDir: state.directory,
     companyRole: els.companyRole.value.trim(),
   });
   els.genCover.disabled = false;
@@ -436,21 +437,54 @@ els.genCover.addEventListener('click', async () => {
     els.coverStatus.textContent = '⚠ ' + res.error;
     return;
   }
-  els.coverStatus.textContent = '✓ Saved in your resumes folder:';
-  renderFileLinks(els.coverResult, [
-    { label: 'DOCX', path: res.docxPath },
-    { label: 'PDF', path: res.pdfPath },
-  ]);
-  const preview = document.createElement('div');
-  preview.className = 'qa-card';
-  preview.innerHTML = `<div class="qa-a">${escapeHtml(res.text)}</div><button class="btn small qa-copy">Copy letter</button>`;
-  preview.querySelector('.qa-copy').addEventListener('click', (ev) => {
-    navigator.clipboard.writeText(res.text);
-    ev.target.textContent = 'Copied ✓';
-    setTimeout(() => (ev.target.textContent = 'Copy letter'), 1500);
-  });
-  els.coverResult.appendChild(preview);
+  lastCoverLetter = res.letter;
+  els.coverStatus.textContent = 'Preview below. Regenerate for a different draft, or save when ready.';
+  renderCoverPreview(res.text);
 });
+
+function renderCoverPreview(text) {
+  els.coverResult.classList.remove('hidden');
+  els.coverResult.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'qa-card';
+  card.innerHTML = `
+    <div class="qa-a">${escapeHtml(text)}</div>
+    <div class="cover-actions">
+      <button class="btn small" data-copy>Copy text</button>
+      <button class="btn small primary" data-save>💾 Save .docx + .pdf</button>
+    </div>
+    <div class="cover-files"></div>`;
+
+  card.querySelector('[data-copy]').addEventListener('click', (ev) => {
+    navigator.clipboard.writeText(text);
+    ev.target.textContent = 'Copied ✓';
+    setTimeout(() => (ev.target.textContent = 'Copy text'), 1500);
+  });
+
+  card.querySelector('[data-save]').addEventListener('click', async (ev) => {
+    if (!lastCoverLetter) return;
+    ev.target.disabled = true;
+    ev.target.textContent = 'Saving…';
+    const res = await window.api.saveCoverLetter({
+      letter: lastCoverLetter,
+      baseFilePath: els.baseResume.value,
+      outDir: state.directory,
+    });
+    ev.target.disabled = false;
+    ev.target.textContent = '💾 Save .docx + .pdf';
+    if (!res.ok) {
+      els.coverStatus.textContent = '⚠ ' + res.error;
+      return;
+    }
+    els.coverStatus.textContent = '✓ Saved in your resumes folder:';
+    renderFileLinks(card.querySelector('.cover-files'), [
+      { label: 'DOCX', path: res.docxPath },
+      { label: 'PDF', path: res.pdfPath },
+    ]);
+  });
+
+  els.coverResult.appendChild(card);
+}
 
 async function answerAndShow(questions, statusEl) {
   const ctx = await ensureReady();
