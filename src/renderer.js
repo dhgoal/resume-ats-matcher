@@ -18,6 +18,7 @@ const els = {
   apiKey: $('apiKey'),
   baseUrl: $('baseUrl'),
   modelSelect: $('modelSelect'),
+  modelPrice: $('modelPrice'),
   loadModels: $('loadModels'),
   concurrency: $('concurrency'),
   saveSettings: $('saveSettings'),
@@ -75,7 +76,12 @@ async function init() {
   if (state.directory) refreshCount(state.directory);
 
   const active = state.providers[state.provider];
-  if (!active.apiKey) openSettings();
+  if (!active.apiKey) {
+    openSettings();
+  } else {
+    // Key already saved → fetch the model list (with prices) automatically.
+    loadModelsForActive(true);
+  }
 }
 
 function loadProviderFields() {
@@ -87,22 +93,48 @@ function loadProviderFields() {
   setModelOptions([], p.model);
 }
 
-// Rebuild the model dropdown. Keeps `selected` visible even if it isn't in `models`.
+// id -> { inPrice, outPrice } (USD per 1M tokens), from the last model load.
+let modelPriceMap = {};
+
+function fmtPrice(v) {
+  if (v == null) return '$?';
+  return '$' + (v < 0.1 ? v.toFixed(3) : v.toFixed(2));
+}
+function priceSuffix(m) {
+  if (m.inPrice == null && m.outPrice == null) return '';
+  return `  —  ${fmtPrice(m.inPrice)}/M in · ${fmtPrice(m.outPrice)}/M out`;
+}
+function updateModelPrice() {
+  const id = els.modelSelect.value;
+  const p = modelPriceMap[id];
+  if (!id || !p || (p.inPrice == null && p.outPrice == null)) {
+    els.modelPrice.textContent = '';
+    return;
+  }
+  els.modelPrice.textContent = `Price: ${fmtPrice(p.inPrice)} / M input · ${fmtPrice(p.outPrice)} / M output`;
+}
+
+// Rebuild the model dropdown. Accepts model objects {id,inPrice,outPrice} or plain id strings.
+// Keeps `selected` visible even if it isn't in `models`.
 function setModelOptions(models, selected) {
-  const list = [...models];
-  if (selected && !list.includes(selected)) list.unshift(selected);
+  const list = models.map((m) => (typeof m === 'string' ? { id: m } : m));
+  modelPriceMap = {};
+  for (const m of list) modelPriceMap[m.id] = { inPrice: m.inPrice ?? null, outPrice: m.outPrice ?? null };
+  if (selected && !list.some((m) => m.id === selected)) list.unshift({ id: selected });
+
   els.modelSelect.innerHTML = '';
   const ph = document.createElement('option');
   ph.value = '';
   ph.textContent = list.length ? '— select a model —' : '— Load models, then choose —';
   els.modelSelect.appendChild(ph);
-  for (const id of list) {
+  for (const m of list) {
     const opt = document.createElement('option');
-    opt.value = id;
-    opt.textContent = id;
+    opt.value = m.id;
+    opt.textContent = m.id + priceSuffix(m);
     els.modelSelect.appendChild(opt);
   }
-  els.modelSelect.value = selected && list.includes(selected) ? selected : '';
+  els.modelSelect.value = selected && list.some((m) => m.id === selected) ? selected : '';
+  updateModelPrice();
 }
 
 // Pull the visible provider fields back into state.
@@ -171,6 +203,7 @@ els.provider.addEventListener('change', () => {
   state.provider = els.provider.value;
   loadProviderFields();
   updateEnginePill();
+  if (state.providers[state.provider].apiKey) loadModelsForActive(true); // auto-refresh list for the new provider
 });
 
 for (const el of [els.apiKey, els.baseUrl, els.concurrency]) {
@@ -183,6 +216,7 @@ for (const el of [els.apiKey, els.baseUrl, els.concurrency]) {
 els.modelSelect.addEventListener('change', () => {
   syncProviderFields();
   updateEnginePill();
+  updateModelPrice();
 });
 
 els.saveSettings.addEventListener('click', async () => {
@@ -192,26 +226,29 @@ els.saveSettings.addEventListener('click', async () => {
   setTimeout(() => (els.settingsStatus.textContent = ''), 2000);
 });
 
-els.loadModels.addEventListener('click', async () => {
+async function loadModelsForActive(silent) {
   syncProviderFields();
   const a = activeProvider();
   if (!a.apiKey) {
-    els.settingsStatus.textContent = 'Enter this provider’s API key first.';
+    if (!silent) els.settingsStatus.textContent = 'Enter this provider’s API key first.';
     return;
   }
   els.loadModels.disabled = true;
-  els.settingsStatus.textContent = `Loading ${PROVIDER_LABELS[a.provider]} models…`;
+  if (!silent) els.settingsStatus.textContent = `Loading ${PROVIDER_LABELS[a.provider]} models…`;
   const res = await window.api.fetchModels({ provider: a.provider, apiKey: a.apiKey, baseUrl: a.baseUrl });
   els.loadModels.disabled = false;
   if (!res.ok) {
-    els.settingsStatus.textContent = 'Failed: ' + res.error;
+    els.settingsStatus.textContent = (silent ? 'Auto-load failed: ' : 'Failed: ') + res.error;
     return;
   }
   setModelOptions(res.models, state.providers[state.provider].model);
   syncProviderFields();
   updateEnginePill();
-  els.settingsStatus.textContent = `Loaded ${res.models.length} models — pick one from the dropdown.`;
-});
+  els.settingsStatus.textContent = `Loaded ${res.models.length} ${PROVIDER_LABELS[a.provider]} models${
+    silent ? ' automatically' : ' — pick one from the dropdown'
+  }.`;
+}
+els.loadModels.addEventListener('click', () => loadModelsForActive(false));
 
 // --------------------------------------------------------------------------
 // Folder

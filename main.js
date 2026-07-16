@@ -137,6 +137,27 @@ function trimTrailingSlash(url) {
   return (url || '').replace(/\/+$/, '');
 }
 
+// Some providers (notably Chutes) return per-token USD pricing in /v1/models.
+// Values are USD *per token*; we convert to USD per 1,000,000 tokens for display.
+function numOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function perMillion(v) {
+  const n = numOrNull(v);
+  return n == null ? null : n * 1e6;
+}
+function inputPriceOf(m) {
+  return perMillion(
+    m?.price?.input?.usd ?? m?.pricing?.prompt ?? m?.price?.input ?? m?.input_price ?? m?.prompt_price
+  );
+}
+function outputPriceOf(m) {
+  return perMillion(
+    m?.price?.output?.usd ?? m?.pricing?.completion ?? m?.price?.output ?? m?.output_price ?? m?.completion_price
+  );
+}
+
 async function fetchModels({ provider, apiKey, baseUrl }) {
   const base = trimTrailingSlash(baseUrl);
   const headers =
@@ -150,9 +171,9 @@ async function fetchModels({ provider, apiKey, baseUrl }) {
   }
   const json = await res.json();
   return (json.data || [])
-    .map((m) => m.id)
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+    .filter((m) => m && m.id)
+    .map((m) => ({ id: m.id, inPrice: inputPriceOf(m), outPrice: outputPriceOf(m) }))
+    .sort((a, b) => a.id.localeCompare(b.id));
 }
 
 // Returns the assistant's raw text content, regardless of provider.

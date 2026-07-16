@@ -45,7 +45,10 @@
             </label>
             <label class="field small-field">
               <span>Parallel requests</span>
-              <input id="concurrency" type="number" min="1" max="8" value="3" />
+              <select id="concurrency">
+                <option>1</option><option>2</option><option selected>3</option><option>4</option>
+                <option>5</option><option>6</option><option>7</option><option>8</option>
+              </select>
             </label>
             <label class="field model-field">
               <span>Model</span>
@@ -53,6 +56,7 @@
                 <select id="modelSelect"><option value="">— Load models, then choose —</option></select>
                 <button id="loadModels" class="btn small">Load models</button>
               </div>
+              <span id="modelPrice" class="model-price"></span>
             </label>
           </div>
           <p class="hint">Keys are stored locally on this PC only (in the app's user-data folder). Each provider keeps its own key &amp; model — switch the Provider dropdown to configure each.</p>

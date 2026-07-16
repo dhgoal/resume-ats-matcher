@@ -329,6 +329,11 @@ input[readonly] { color: var(--muted); cursor: default; }
 
 .key-hint { color: var(--muted); font-style: normal; font-size: 11px; }
 select { appearance: none; cursor: pointer; }
+.model-price { margin-top: 6px; font-size: 12px; color: var(--accent-2); min-height: 15px; }
+
+/* Hide native number spinners (kept as a safety for any number inputs) */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 .empty { color: var(--muted); text-align: center; padding: 20px; }
 
