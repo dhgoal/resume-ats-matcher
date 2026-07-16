@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+    <title>Resume ATS Matcher</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">📄</span>
+        <div>
+          <h1>Resume ATS Matcher</h1>
+          <p class="subtitle">Rank DOCX resumes against a job description · powered by Chutes.ai</p>
+        </div>
+      </div>
+      <button id="toggleSettings" class="btn ghost">⚙️ Settings</button>
+    </header>
+
+    <!-- Settings panel -->
+    <section id="settingsPanel" class="panel settings hidden">
+      <h2>AI provider &amp; keys</h2>
+      <div class="grid">
+        <label class="field">
+          <span>Provider</span>
+          <select id="provider">
+            <option value="chutes">Chutes.ai</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>API key <em id="providerKeyHint" class="key-hint"></em></span>
+          <input id="apiKey" type="password" placeholder="paste key…" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span>Base URL</span>
+          <input id="baseUrl" type="text" spellcheck="false" />
+        </label>
+        <label class="field small-field">
+          <span>Parallel requests</span>
+          <input id="concurrency" type="number" min="1" max="8" value="3" />
+        </label>
+        <label class="field model-field">
+          <span>Model</span>
+          <div class="model-row">
+            <select id="modelSelect"><option value="">— Load models, then choose —</option></select>
+            <button id="loadModels" class="btn small">Load models</button>
+          </div>
+        </label>
+      </div>
+      <div class="settings-actions">
+        <button id="saveSettings" class="btn primary">Save settings</button>
+        <span id="settingsStatus" class="status-inline"></span>
+      </div>
+      <p class="hint">Keys are stored locally on this PC only (in the app's user-data folder). Each provider keeps its own key &amp; model — switch the Provider dropdown to configure each.</p>
+    </section>
+
+    <!-- Main -->
+    <main class="content">
+      <section class="panel">
+        <div class="row folder-row">
+          <label class="field grow">
+            <span>Resumes folder (.docx)</span>
+            <input id="directory" type="text" placeholder="Choose a folder containing .docx resumes…" readonly />
+          </label>
+          <button id="browse" class="btn">📁 Browse…</button>
+          <div class="count-pill" id="countPill" title="DOCX resumes found">0 resumes</div>
+        </div>
+
+        <label class="field">
+          <span>Job description</span>
+          <textarea id="jobDescription" rows="9" placeholder="Paste the full job description here…"></textarea>
+        </label>
+
+        <div class="row actions-row">
+          <button id="analyze" class="btn primary big">▶ Analyze &amp; rank</button>
+          <span id="enginePill" class="count-pill" title="Active provider and model">—</span>
+          <div class="progress-wrap">
+            <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+            <span id="progressText" class="status-inline"></span>
+          </div>
+        </div>
+      </section>
+
+      <section id="resultsSection" class="panel results hidden">
+        <div class="results-head">
+          <h2>Results</h2>
+          <span id="resultsSummary" class="muted"></span>
+        </div>
+        <div id="results"></div>
+      </section>
+
+      <section id="toolsSection" class="panel tools-panel hidden">
+        <h2>Tailor &amp; apply</h2>
+        <label class="field">
+          <span>Base resume — your real experience to build from</span>
+          <select id="baseResume"></select>
+        </label>
+
+        <div class="tool-block">
+          <div class="tool-head">
+            <h3>✨ Generate a tailored resume</h3>
+            <button id="genResume" class="btn primary">Generate .docx + .pdf</button>
+          </div>
+          <p class="hint">Rewrites your base resume to match the job description (keyword emphasis, targeted summary), keeping the <strong>same font, size, margins and heading style</strong> as your source resume — without inventing experience. Saves a <code>.docx</code> and a <code>.pdf</code> in your resumes folder.</p>
+          <div id="genStatus" class="status-inline"></div>
+          <div id="genResult" class="gen-result hidden"></div>
+        </div>
+
+        <div class="tool-block">
+          <div class="tool-head">
+            <h3>📝 Generate a cover letter</h3>
+            <button id="genCover" class="btn primary">Generate .docx + .pdf</button>
+          </div>
+          <label class="field">
+            <span>Company / role (optional — helps target the letter)</span>
+            <input id="companyRole" type="text" placeholder="e.g. Acme Corp — Senior Frontend Engineer" />
+          </label>
+          <div id="coverStatus" class="status-inline"></div>
+          <div id="coverResult" class="gen-result hidden"></div>
+        </div>
+
+        <div class="tool-block">
+          <div class="tool-head">
+            <h3>💬 Answer application questions</h3>
+            <button id="answerQs" class="btn primary">Answer these</button>
+          </div>
+          <label class="field">
+            <span>Paste the application / screening questions — one per line</span>
+            <textarea id="questions" rows="4" placeholder="Why do you want this role?&#10;Describe your experience with React.&#10;What is your expected salary?"></textarea>
+          </label>
+          <div id="qaStatus" class="status-inline"></div>
+          <div id="qaResult" class="qa-result"></div>
+
+          <div class="saved-head">
+            <h4>Saved questions <span id="savedCount" class="muted"></span></h4>
+            <button id="answerPinned" class="btn small">📌 Answer all pinned</button>
+          </div>
+          <p class="hint">Questions you answer are saved here with how often they come up. Pin the ones you reuse, then answer them all in one click.</p>
+          <div id="savedQuestions" class="saved-list"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

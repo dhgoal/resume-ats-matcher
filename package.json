@@ -1,0 +1,33 @@
+{
+  "name": "resume-ats-matcher",
+  "version": "1.0.0",
+  "description": "Rank DOCX resumes against a job description with ATS scoring, powered by Chutes.ai LLMs",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "docx": "^9.7.1",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.8.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0"
+  },
+  "build": {
+    "appId": "com.jct.resumeatsmatcher",
+    "productName": "Resume ATS Matcher",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "portable"
+    }
+  }
+}
