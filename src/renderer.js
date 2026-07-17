@@ -36,6 +36,8 @@ const els = {
   rsList: $('rsList'),
   rsAll: $('rsAll'),
   rsNone: $('rsNone'),
+  rsToggle: $('rsToggle'),
+  rsCaret: $('rsCaret'),
   enginePill: $('enginePill'),
   jobDescription: $('jobDescription'),
   analyze: $('analyze'),
@@ -372,6 +374,8 @@ function renderResumeList(files) {
     return;
   }
   els.resumeSelect.classList.remove('hidden');
+  els.rsList.classList.add('collapsed'); // start collapsed to avoid a scrollbar on load
+  els.rsCaret.classList.remove('open');
   for (const f of files) {
     const row = document.createElement('label');
     row.className = 'rs-item';
@@ -397,6 +401,10 @@ function updateRsCount() {
   els.rsCount.textContent = `(${selectedResumes.size} of ${total} selected)`;
 }
 
+els.rsToggle.addEventListener('click', () => {
+  const collapsed = els.rsList.classList.toggle('collapsed');
+  els.rsCaret.classList.toggle('open', !collapsed);
+});
 els.rsAll.addEventListener('click', () => {
   selectedResumes = new Set();
   for (const cb of els.rsList.querySelectorAll('input[type=checkbox]')) {

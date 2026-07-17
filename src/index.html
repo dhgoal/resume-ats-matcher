@@ -127,13 +127,16 @@
 
           <div id="resumeSelect" class="resume-select hidden">
             <div class="rs-head">
-              <span>Résumés to check <span id="rsCount" class="muted"></span></span>
+              <button type="button" id="rsToggle" class="rs-toggle">
+                <span id="rsCaret" class="rs-caret">▸</span>
+                <span>Résumés to check <span id="rsCount" class="muted"></span></span>
+              </button>
               <span class="rs-actions">
                 <button id="rsAll" class="btn small">Select all</button>
                 <button id="rsNone" class="btn small">None</button>
               </span>
             </div>
-            <div id="rsList" class="rs-list"></div>
+            <div id="rsList" class="rs-list collapsed"></div>
           </div>
 
           <label class="field jd-field">

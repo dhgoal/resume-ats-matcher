@@ -201,9 +201,14 @@ body {
 
 /* Résumé selection checklist */
 .resume-select { margin: 14px 0 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
-.rs-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 600; }
+.rs-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 12px 6px 8px; font-size: 12.5px; font-weight: 600; }
+.rs-toggle { display: flex; align-items: center; gap: 8px; background: transparent; border: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; padding: 4px; border-radius: 6px; }
+.rs-toggle:hover { color: var(--accent); }
+.rs-caret { display: inline-block; transition: transform 0.15s; font-size: 11px; color: var(--muted); }
+.rs-caret.open { transform: rotate(90deg); }
 .rs-actions { display: flex; gap: 6px; }
-.rs-list { max-height: 150px; overflow-y: auto; padding: 6px 8px; }
+.rs-list { max-height: 170px; overflow-y: auto; padding: 4px 8px 8px; border-top: 1px solid var(--border); }
+.rs-list.collapsed { display: none; }
 .rs-item { display: flex; align-items: center; gap: 9px; padding: 4px 6px; border-radius: 6px; font-size: 13px; cursor: pointer; }
 .rs-item:hover { background: var(--panel); }
 .rs-item input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex: 0 0 auto; }
