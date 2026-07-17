@@ -464,8 +464,14 @@ async function analyze(event, params) {
   if (!directory) throw new Error('Please choose a resumes folder.');
   if (!jobDescription || !jobDescription.trim()) throw new Error('Please paste a job description.');
 
-  const files = await listResumes(directory);
-  if (files.length === 0) throw new Error('No .docx resumes found in that folder.');
+  const allFiles = await listResumes(directory);
+  if (allFiles.length === 0) throw new Error('No .docx resumes found in that folder.');
+  // Score only the user-selected résumés (default: all).
+  const files =
+    Array.isArray(params.files) && params.files.length
+      ? allFiles.filter((f) => params.files.includes(f))
+      : allFiles;
+  if (files.length === 0) throw new Error('No résumés selected to score.');
 
   const send = (payload) => {
     if (!event.sender.isDestroyed()) event.sender.send('analyze:progress', payload);

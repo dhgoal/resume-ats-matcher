@@ -125,6 +125,17 @@
             <div class="count-pill" id="countPill" title="DOCX resumes found">0 resumes</div>
           </div>
 
+          <div id="resumeSelect" class="resume-select hidden">
+            <div class="rs-head">
+              <span>Résumés to check <span id="rsCount" class="muted"></span></span>
+              <span class="rs-actions">
+                <button id="rsAll" class="btn small">Select all</button>
+                <button id="rsNone" class="btn small">None</button>
+              </span>
+            </div>
+            <div id="rsList" class="rs-list"></div>
+          </div>
+
           <label class="field jd-field">
             <span>Job description</span>
             <textarea id="jobDescription" rows="9" placeholder="Paste the full job description here…"></textarea>

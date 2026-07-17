@@ -31,6 +31,11 @@ const els = {
   directory: $('directory'),
   browse: $('browse'),
   countPill: $('countPill'),
+  resumeSelect: $('resumeSelect'),
+  rsCount: $('rsCount'),
+  rsList: $('rsList'),
+  rsAll: $('rsAll'),
+  rsNone: $('rsNone'),
   enginePill: $('enginePill'),
   jobDescription: $('jobDescription'),
   analyze: $('analyze'),
@@ -343,16 +348,68 @@ els.browse.addEventListener('click', async () => {
   refreshCount(dir);
 });
 
+// Which résumés in the folder to score (default: all).
+let selectedResumes = new Set();
+
 async function refreshCount(dir) {
   const res = await window.api.listResumes(dir);
   if (res.ok) {
     const n = res.files.length;
     els.countPill.textContent = `${n} resume${n === 1 ? '' : 's'}`;
     els.countPill.style.color = n ? 'var(--accent-2)' : 'var(--muted)';
+    renderResumeList(res.files);
   } else {
     els.countPill.textContent = 'folder error';
+    renderResumeList([]);
   }
 }
+
+function renderResumeList(files) {
+  selectedResumes = new Set(files); // all selected by default
+  els.rsList.innerHTML = '';
+  if (files.length === 0) {
+    els.resumeSelect.classList.add('hidden');
+    return;
+  }
+  els.resumeSelect.classList.remove('hidden');
+  for (const f of files) {
+    const row = document.createElement('label');
+    row.className = 'rs-item';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.dataset.file = f;
+    const span = document.createElement('span');
+    span.textContent = f;
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedResumes.add(f);
+      else selectedResumes.delete(f);
+      updateRsCount();
+    });
+    row.append(cb, span);
+    els.rsList.appendChild(row);
+  }
+  updateRsCount();
+}
+
+function updateRsCount() {
+  const total = els.rsList.querySelectorAll('input[type=checkbox]').length;
+  els.rsCount.textContent = `(${selectedResumes.size} of ${total} selected)`;
+}
+
+els.rsAll.addEventListener('click', () => {
+  selectedResumes = new Set();
+  for (const cb of els.rsList.querySelectorAll('input[type=checkbox]')) {
+    cb.checked = true;
+    selectedResumes.add(cb.dataset.file);
+  }
+  updateRsCount();
+});
+els.rsNone.addEventListener('click', () => {
+  selectedResumes = new Set();
+  for (const cb of els.rsList.querySelectorAll('input[type=checkbox]')) cb.checked = false;
+  updateRsCount();
+});
 
 // Where generated files go: an explicit output folder, or the resumes folder by default.
 function effectiveOutputDir() {
@@ -392,6 +449,7 @@ async function runAnalysis() {
   if (!a.apiKey) problems.push(`${PROVIDER_LABELS[a.provider]} API key`);
   if (!a.model) problems.push('model');
   if (!state.directory) problems.push('resumes folder');
+  else if (selectedResumes.size === 0) problems.push('at least one résumé selected');
   if (!jobDescription) problems.push('job description');
   if (problems.length) {
     setProgress(0, `Missing: ${problems.join(', ')}.`);
@@ -424,6 +482,7 @@ async function runAnalysis() {
     model: a.model,
     concurrency: state.concurrency,
     directory: state.directory,
+    files: [...selectedResumes],
     jobDescription,
     ...activePrice(),
   });
