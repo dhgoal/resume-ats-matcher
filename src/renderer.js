@@ -311,8 +311,8 @@ els.modelSelect.addEventListener('change', () => {
 els.saveSettings.addEventListener('click', async () => {
   await persist();
   updateEnginePill();
-  els.settingsStatus.textContent = '✓ Saved';
-  setTimeout(() => (els.settingsStatus.textContent = ''), 2000);
+  els.settingsStatus.textContent = '';
+  closeSettings();
 });
 
 async function loadModelsForActive(silent) {
