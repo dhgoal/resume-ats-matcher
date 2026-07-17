@@ -405,6 +405,13 @@ els.rsToggle.addEventListener('click', () => {
   const collapsed = els.rsList.classList.toggle('collapsed');
   els.rsCaret.classList.toggle('open', !collapsed);
 });
+// Close the dropdown when clicking anywhere outside it.
+document.addEventListener('click', (e) => {
+  if (!els.rsList.classList.contains('collapsed') && !els.resumeSelect.contains(e.target)) {
+    els.rsList.classList.add('collapsed');
+    els.rsCaret.classList.remove('open');
+  }
+});
 els.rsAll.addEventListener('click', () => {
   selectedResumes = new Set();
   for (const cb of els.rsList.querySelectorAll('input[type=checkbox]')) {
